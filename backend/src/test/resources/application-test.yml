@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:file:p0-test?mode=memory&cache=shared
+    driver-class-name: org.sqlite.JDBC
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/sqlite/schema.sql

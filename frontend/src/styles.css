@@ -1,0 +1,560 @@
+:root {
+  font-family: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  color: #272724;
+  background: #f2efe8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  /* Element Plus 主题色覆盖 — 匹配项目暖色系 */
+  --el-color-primary: #292925;
+  --el-color-primary-light-3: #5a5a56;
+  --el-color-primary-light-5: #8b8b88;
+  --el-color-primary-light-7: #bdbdbb;
+  --el-color-primary-light-8: #d6d6d5;
+  --el-color-primary-light-9: #e8e8e7;
+  --el-color-primary-dark-2: #21211e;
+  --el-color-success: #6b8c67;
+  --el-color-warning: #c49a4a;
+  --el-color-danger: #a4433f;
+  --el-color-info: #9a9387;
+  --el-border-radius-base: 4px;
+  --el-border-color: #d4cfc4;
+  --el-fill-color: #ffffff;
+  --el-fill-color-light: #faf8f3;
+  --el-bg-color: #faf8f3;
+  --el-text-color-primary: #272724;
+  --el-text-color-regular: #54504a;
+  --el-text-color-secondary: #777168;
+  --el-input-bg-color: #ffffff;
+  --el-input-border-color: #d4cfc4;
+  --el-input-hover-border-color: #292925;
+  --el-input-focus-border-color: #292925;
+  --el-dialog-bg-color: #faf8f3;
+  --el-table-bg-color: #faf8f3;
+  --el-table-border-color: #e3dfd6;
+  --el-table-header-bg-color: #f2efe8;
+  --el-table-row-hover-bg-color: #f5f2eb;
+  --el-checkbox-input-border-color: #d4cfc4;
+  --el-checkbox-checked-bg-color: #292925;
+  --el-checkbox-checked-border-color: #292925;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.shell {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 10vh 0 64px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 9vh;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: #686259;
+  cursor: pointer;
+}
+
+.login-shell {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  min-height: 100vh;
+}
+
+.login-intro {
+  padding: 10vh 8vw;
+  background: #282825;
+  color: #f3efe5;
+}
+
+.login-intro h1 {
+  font-size: clamp(52px, 7vw, 96px);
+}
+
+.login-intro > p:last-child {
+  max-width: 560px;
+  margin-top: 36px;
+  color: #bcb7ad;
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 9vw;
+  background: #f2efe8;
+}
+
+.login-panel h2 {
+  margin: 8px 0 44px;
+  font-family: Georgia, serif;
+  font-size: 34px;
+}
+
+.step-label {
+  color: #8b8479;
+  font-size: 11px;
+  letter-spacing: .18em;
+}
+
+.login-panel form,
+.login-panel label {
+  display: grid;
+  gap: 10px;
+}
+
+.login-panel form {
+  gap: 24px;
+}
+
+.login-panel label {
+  color: #6a655d;
+  font-size: 13px;
+}
+
+.login-panel input {
+  width: 100%;
+  padding: 15px 2px;
+  border: 0;
+  border-bottom: 1px solid #bdb7ab;
+  outline: none;
+  background: transparent;
+  color: #292925;
+  font-size: 16px;
+}
+
+.login-panel input:focus {
+  border-color: #292925;
+}
+
+.login-panel button[type="submit"] {
+  margin-top: 12px;
+  padding: 15px;
+  border: 1px solid #292925;
+  background: #292925;
+  color: #f7f4ec;
+  cursor: pointer;
+}
+
+.form-error {
+  margin: 0;
+  color: #a4433f;
+  font-size: 13px;
+}
+
+.login-hint {
+  margin-top: 24px;
+  color: #918a7e;
+  font-size: 12px;
+}
+
+.hero {
+  max-width: 800px;
+}
+
+.eyebrow {
+  margin: 0 0 28px;
+  color: #77736b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+h1 {
+  margin: 0;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(46px, 7vw, 84px);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+
+.summary {
+  max-width: 650px;
+  margin: 32px 0;
+  color: #656159;
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #d4cfc4;
+  border-radius: 999px;
+  background: #faf8f3;
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b8c67;
+}
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 24px;
+  background: #faf8f3;
+  border: 1px solid #d4cfc4;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 500;
+  font-family: Georgia, "Noto Serif SC", serif;
+  color: #292925;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #777168;
+  letter-spacing: 0.05em;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 12vh;
+  border-top: 1px solid #cbc5b9;
+  border-left: 1px solid #cbc5b9;
+}
+
+.steps article {
+  min-height: 190px;
+  padding: 26px;
+  border-right: 1px solid #cbc5b9;
+  border-bottom: 1px solid #cbc5b9;
+}
+
+.steps span {
+  color: #9a9387;
+  font-size: 12px;
+}
+
+.steps h2 {
+  margin: 54px 0 8px;
+  font-size: 18px;
+}
+
+.steps p {
+  margin: 0;
+  color: #777168;
+}
+
+@media (max-width: 720px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-intro {
+    min-height: 42vh;
+  }
+
+  .shell {
+    padding-top: 64px;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    margin-top: 72px;
+  }
+
+  .steps article {
+    min-height: 150px;
+  }
+
+  .steps h2 {
+    margin-top: 30px;
+  }
+}
+
+/* ── 管理页面通用 ── */
+
+.page {
+  max-width: 1100px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: 28px;
+  font-weight: 500;
+}
+
+.page-intro {
+  margin: 8px 0 0;
+  color: #777168;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+.loading {
+  color: #777168;
+  font-size: 14px;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.url-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.method {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #e3dfd6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.badge.draft { background: #e3dfd6; color: #656159; }
+.badge.active, .badge.published { background: #cfe4cf; color: #3a6b3a; }
+.badge.disabled { background: #e8d5d4; color: #8a3f3b; }
+
+.actions {
+  white-space: nowrap;
+}
+
+.text-btn {
+  border: 0;
+  background: transparent;
+  color: #686259;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.text-btn:hover { color: #292925; }
+.text-btn.danger { color: #a4433f; }
+.text-btn.danger:hover { color: #c93830; }
+
+.bind-section {
+  margin-bottom: 16px;
+}
+
+.bind-row {
+  display: flex;
+  gap: 8px;
+}
+
+.bind-row select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d4cfc4;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.bind-btn {
+  white-space: nowrap;
+}
+
+/* ── 编辑弹窗 & 左右分割 ── */
+
+.editor-hint {
+  font-weight: 400;
+  color: #9a9387;
+  font-size: 12px;
+}
+
+/* ── 变量定义表（Element Plus 内嵌） ── */
+
+.var-table-ep {
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+}
+
+.var-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.var-header-label {
+  color: #54504a;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.var-empty {
+  color: #9a9387;
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.var-key {
+  background: #e3dfd6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Schema 预览 ── */
+
+.schema-preview-inline {
+  margin-top: 8px;
+}
+
+.code-sm {
+  max-height: 160px;
+  font-size: 11px;
+}
+
+/* ── Element Plus 覆盖 ── */
+
+.mono-input .el-textarea__inner {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 表头样式对齐手写表格 */
+.el-table thead th.el-table__cell {
+  background-color: #f2efe8 !important;
+  color: #656159 !important;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.el-table thead th.el-table__cell .cell {
+  color: #656159;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: #f8f6f0;
+}
+
+/* ── 编组 Tool 折叠列表 ── */
+
+.bound-list {
+  display: grid;
+  gap: 0;
+}
+
+.bound-item {
+  border-bottom: 1px solid #e3dfd6;
+}
+
+.bound-row {
+  display: grid;
+  grid-template-columns: 20px 56px 1fr 2fr 50px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+.bound-row:hover {
+  background: #f5f2eb;
+}
+
+.bound-expand {
+  text-align: center;
+  color: #686259;
+  font-size: 13px;
+}
+
+.bound-name {
+  font-weight: 500;
+}
+
+.bound-url {
+  color: #777168;
+  font-size: 13px;
+}
+
+.bound-detail {
+  padding: 8px 8px 16px 28px;
+  background: #faf8f3;
+}
+
+.param-schema-sm {
+  font-size: 11px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+}
+
+/* ── Schema 预览 ── */
+
+.schema-preview label {
+  font-weight: 600;
+  color: #54504a;
+  font-size: 13px;
+}
+
+.schema-code {
+  margin: 0;
+  padding: 12px;
+  background: #2d2d2a;
+  color: #e0ddd5;
+  border-radius: 4px;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 200px;
+}

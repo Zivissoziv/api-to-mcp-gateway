@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:./data/mcp-gateway-local.db
+    driver-class-name: org.sqlite.JDBC
+    username:
+    password:
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/sqlite/schema.sql
+
