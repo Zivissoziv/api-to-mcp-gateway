@@ -56,6 +56,37 @@ public class McpServerController {
         service.unbindTool(id, toolId);
     }
 
+    // -- Publish / MCP Key --
+
+    @PostMapping("/{id}/publish")
+    McpServerService.PublishResult publish(@PathVariable long id, @RequestBody(required = false) PublishRequest req) {
+        String mcpKey = (req != null) ? req.mcpKey() : null;
+        return service.publish(id, mcpKey);
+    }
+
+    @PostMapping("/{id}/unpublish")
+    McpServer unpublish(@PathVariable long id) {
+        return service.unpublish(id);
+    }
+
+    @GetMapping("/{id}/connection-info")
+    ConnectionInfo connectionInfo(@PathVariable long id) {
+        McpServer server = service.get(id);
+        String mcpKey = service.getMcpKey(id);
+        return new ConnectionInfo(server.code(), "/mcp/" + server.code(), mcpKey);
+    }
+
+    @PostMapping("/{id}/reset-key")
+    ResetKeyResult resetKey(@PathVariable long id, @RequestBody(required = false) ResetKeyRequest req) {
+        String newKey = (req != null) ? req.mcpKey() : null;
+        String rawKey = service.resetMcpKey(id, newKey);
+        return new ResetKeyResult(rawKey);
+    }
+
     public record UpsertRequest(@NotBlank String code, @NotBlank String name, String description) {}
     public record BindRequest(@NotNull Long toolId) {}
+    public record PublishRequest(String mcpKey) {}
+    public record ResetKeyRequest(String mcpKey) {}
+    public record ConnectionInfo(String serverCode, String mcpPath, String mcpKey) {}
+    public record ResetKeyResult(String rawMcpKey) {}
 }

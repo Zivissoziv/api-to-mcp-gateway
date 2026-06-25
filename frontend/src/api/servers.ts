@@ -72,3 +72,33 @@ export async function unbindTool(serverId: number, toolId: number): Promise<void
   const res = await fetch(`/api/servers/${serverId}/tools/${toolId}`, { method: 'DELETE', headers: headers() })
   if (!res.ok) throw new Error('Failed to unbind tool')
 }
+
+// -- Publish / MCP Key --
+
+export async function publishServer(id: number, mcpKey?: string): Promise<{ rawMcpKey: string; server: McpServer }> {
+  return fetchJson(`/api/servers/${id}/publish`, {
+    method: 'POST',
+    body: JSON.stringify(mcpKey ? { mcpKey } : {}),
+  })
+}
+
+export async function unpublishServer(id: number): Promise<McpServer> {
+  return fetchJson(`/api/servers/${id}/unpublish`, { method: 'POST' })
+}
+
+export interface ConnectionInfo {
+  serverCode: string
+  mcpPath: string
+  mcpKey: string | null
+}
+
+export async function getConnectionInfo(id: number): Promise<ConnectionInfo> {
+  return fetchJson(`/api/servers/${id}/connection-info`)
+}
+
+export async function resetMcpKey(id: number, mcpKey?: string): Promise<{ rawMcpKey: string }> {
+  return fetchJson(`/api/servers/${id}/reset-key`, {
+    method: 'POST',
+    body: JSON.stringify(mcpKey ? { mcpKey } : {}),
+  })
+}

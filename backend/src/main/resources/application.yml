@@ -45,6 +45,7 @@ app:
     bootstrap-admin:
       username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
       password: ${BOOTSTRAP_ADMIN_PASSWORD:Admin@123456}
+    encryption-key: ${ENCRYPTION_KEY:change-this-encryption-key-32bytes!}
 
 logging:
   pattern:

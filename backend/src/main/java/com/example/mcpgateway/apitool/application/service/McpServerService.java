@@ -3,18 +3,26 @@ package com.example.mcpgateway.apitool.application.service;
 import com.example.mcpgateway.apitool.domain.model.*;
 import com.example.mcpgateway.apitool.domain.repository.McpServerRepository;
 import com.example.mcpgateway.apitool.domain.repository.McpServerToolRepository;
+import com.example.mcpgateway.gateway.domain.model.McpServerAuth;
+import com.example.mcpgateway.gateway.domain.repository.McpServerAuthRepository;
+import com.example.mcpgateway.identity.infrastructure.security.BcryptPasswordService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class McpServerService {
     private final McpServerRepository servers;
     private final McpServerToolRepository serverTools;
-    public McpServerService(McpServerRepository servers, McpServerToolRepository serverTools) {
+    private final McpServerAuthRepository authRepo;
+    private final BcryptPasswordService passwords;
+    public McpServerService(McpServerRepository servers, McpServerToolRepository serverTools,
+                            McpServerAuthRepository authRepo, BcryptPasswordService passwords) {
         this.servers = servers; this.serverTools = serverTools;
+        this.authRepo = authRepo; this.passwords = passwords;
     }
 
     public List<McpServer> list() { return servers.findAll(); }
@@ -49,6 +57,7 @@ public class McpServerService {
     public void delete(long id) {
         servers.findById(id).orElseThrow(() -> new ServerNotFoundException(id));
         serverTools.deleteByServerId(id);
+        authRepo.deleteByServerId(id);
         servers.deleteById(id);
     }
 
@@ -71,6 +80,69 @@ public class McpServerService {
         serverTools.deleteByServerIdAndToolId(serverId, toolId);
     }
 
+    // -- Publish / Unpublish / MCP Key --
+
+    @Transactional
+    public PublishResult publish(long id, String mcpKey) {
+        McpServer server = get(id);
+        if (server.status() == ServerStatus.PUBLISHED)
+            throw new AlreadyPublishedException(server.code());
+        List<McpServerTool> tools = serverTools.findByServerId(id);
+        if (tools.isEmpty())
+            throw new PublishValidationException("Server " + server.code() + " has no tools bound");
+
+        String rawKey = (mcpKey != null && !mcpKey.isBlank()) ? mcpKey : UUID.randomUUID().toString();
+        String keyHash = passwords.encode(rawKey);
+        Instant now = Instant.now();
+
+        // Upsert MCP Key
+        var existingAuth = authRepo.findByServerId(id);
+        if (existingAuth.isPresent()) {
+            authRepo.update(new McpServerAuth(existingAuth.get().id(), id, keyHash,
+                    existingAuth.get().createdAt(), now));
+        } else {
+            authRepo.save(new McpServerAuth(null, id, keyHash, now, now));
+        }
+
+        // Update server status
+        McpServer published = new McpServer(id, server.code(), server.name(), server.description(),
+                ServerStatus.PUBLISHED, server.createdBy(), server.createdAt(), now);
+        servers.update(published);
+
+        return new PublishResult(rawKey, published);
+    }
+
+    @Transactional
+    public McpServer unpublish(long id) {
+        McpServer server = get(id);
+        if (server.status() != ServerStatus.PUBLISHED)
+            throw new NotPublishedException(server.code());
+        Instant now = Instant.now();
+        McpServer draft = new McpServer(id, server.code(), server.name(), server.description(),
+                ServerStatus.DRAFT, server.createdBy(), server.createdAt(), now);
+        servers.update(draft);
+        return draft;
+    }
+
+    @Transactional
+    public String resetMcpKey(long id, String newKey) {
+        get(id); // validate exists
+        String rawKey = (newKey != null && !newKey.isBlank()) ? newKey : UUID.randomUUID().toString();
+        String keyHash = passwords.encode(rawKey);
+        Instant now = Instant.now();
+        var existing = authRepo.findByServerId(id)
+                .orElseThrow(() -> new ServerNotConfiguredException(id));
+        authRepo.update(new McpServerAuth(existing.id(), id, keyHash, existing.createdAt(), now));
+        return rawKey;
+    }
+
+    public String getMcpKey(long id) {
+        get(id); // validate exists
+        return authRepo.findByServerId(id).map(a -> a.mcpKeyHash()).orElse(null);
+    }
+
+    public record PublishResult(String rawMcpKey, McpServer server) {}
+
     public static class ServerNotFoundException extends RuntimeException {
         public ServerNotFoundException(long id) { super("Server not found: " + id); }
     }
@@ -81,5 +153,17 @@ public class McpServerService {
         public ToolAlreadyBoundException(long serverId, long toolId) {
             super("Tool " + toolId + " already bound to server " + serverId);
         }
+    }
+    public static class AlreadyPublishedException extends RuntimeException {
+        public AlreadyPublishedException(String code) { super("Server already published: " + code); }
+    }
+    public static class NotPublishedException extends RuntimeException {
+        public NotPublishedException(String code) { super("Server is not published: " + code); }
+    }
+    public static class PublishValidationException extends RuntimeException {
+        public PublishValidationException(String msg) { super(msg); }
+    }
+    public static class ServerNotConfiguredException extends RuntimeException {
+        public ServerNotConfiguredException(long id) { super("Server auth not configured: " + id); }
     }
 }

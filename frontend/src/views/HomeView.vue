@@ -24,10 +24,13 @@ function logout() {
           <span class="dot"></span> 接口注册
         </router-link>
         <router-link to="/servers" class="nav-item" active-class="active">
-          <span class="dot"></span> 发布配置
+          <span class="dot"></span> 发布 MCP 服务
         </router-link>
         <router-link to="/network-allowlist" class="nav-item" active-class="active">
           <span class="dot"></span> 网络白名单
+        </router-link>
+        <router-link to="/ai-chat" class="nav-item" active-class="active">
+          <span class="dot"></span> AI 聊天测试
         </router-link>
       </nav>
       <div class="sidebar-footer">

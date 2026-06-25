@@ -49,6 +49,7 @@ onMounted(load)
     </header>
 
     <el-table v-loading="loading" :data="entries" stripe style="width:100%">
+      <el-table-column type="index" label="#" width="50" />
       <el-table-column label="模式" min-width="220">
         <template #default="{ row }"><code>{{ row.pattern }}</code></template>
       </el-table-column>

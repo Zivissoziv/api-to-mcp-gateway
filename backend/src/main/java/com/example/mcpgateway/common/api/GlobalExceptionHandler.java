@@ -13,6 +13,7 @@ import com.example.mcpgateway.identity.application.service.UserManagementService
 import com.example.mcpgateway.apitool.application.service.HttpToolService;
 import com.example.mcpgateway.apitool.application.service.McpServerService;
 import com.example.mcpgateway.apitool.application.service.SchemaConversionService;
+import com.example.mcpgateway.aitest.application.service.AiModelConfigService;
 
 import java.time.Instant;
 
@@ -84,6 +85,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SchemaConversionService.InvalidSchemaException.class)
     ResponseEntity<ApiError> invalidSchema(SchemaConversionService.InvalidSchemaException e, HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_SCHEMA", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(McpServerService.AlreadyPublishedException.class)
+    ResponseEntity<ApiError> alreadyPublished(McpServerService.AlreadyPublishedException e, HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "ALREADY_PUBLISHED", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(McpServerService.NotPublishedException.class)
+    ResponseEntity<ApiError> notPublished(McpServerService.NotPublishedException e, HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "NOT_PUBLISHED", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(McpServerService.PublishValidationException.class)
+    ResponseEntity<ApiError> publishValidation(McpServerService.PublishValidationException e, HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "PUBLISH_VALIDATION", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(AiModelConfigService.ConfigNotFoundException.class)
+    ResponseEntity<ApiError> configNotFound(HttpServletRequest request) {
+        return error(HttpStatus.NOT_FOUND, "CONFIG_NOT_FOUND", "AI model config not found", request);
     }
 
     private ResponseEntity<ApiError> error(
