@@ -60,14 +60,3 @@ CREATE TABLE IF NOT EXISTS mcp_server_tools (
     FOREIGN KEY (tool_id) REFERENCES http_tools(id),
     UNIQUE(server_id, tool_id)
 );
-
-CREATE TABLE IF NOT EXISTS network_allowlist (
-    id              BIGINT    NOT NULL PRIMARY KEY,
-    pattern         VARCHAR(256) NOT NULL,
-    pattern_type    VARCHAR(8) NOT NULL,
-    description     VARCHAR(512) NOT NULL DEFAULT '',
-    enabled         INTEGER   NOT NULL DEFAULT 1,
-    created_by      VARCHAR(36) NOT NULL,
-    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
-);

@@ -3,7 +3,6 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import HttpToolsView from '../views/HttpToolsView.vue'
 import McpServersView from '../views/McpServersView.vue'
-import NetworkAllowlistView from '../views/NetworkAllowlistView.vue'
 import AiChatView from '../views/AiChatView.vue'
 import { useSession } from '../stores/session'
 
@@ -28,11 +27,6 @@ const router = createRouter({
           path: 'servers',
           name: 'servers',
           component: McpServersView,
-        },
-        {
-          path: 'network-allowlist',
-          name: 'network-allowlist',
-          component: NetworkAllowlistView,
         },
         {
           path: 'ai-chat',

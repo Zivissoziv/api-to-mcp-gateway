@@ -276,7 +276,6 @@ async function executeTest() {
         headerTemplate.value || '',
         form.value.headers || '',
       ].filter(Boolean).join('\n'),
-      bodyTemplate: bodyTemplate.value || undefined,
       parameterMappings: buildParamMappings(),
       parameterValues: vals,
     })
@@ -400,7 +399,7 @@ onMounted(load)
           <el-row :gutter="16">
             <el-col :span="12">
               <el-form-item label="名称" required>
-                <el-input v-model="form.name" />
+                <el-input v-model="form.name" placeholder="get_user_info" @input="form.name = form.name.replace(/[^a-zA-Z0-9_-]/g, '')" />
               </el-form-item>
             </el-col>
             <el-col :span="12">

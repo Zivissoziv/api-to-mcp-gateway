@@ -3,20 +3,27 @@ package com.example.mcpgateway.apitool.application.service;
 import com.example.mcpgateway.apitool.domain.model.*;
 import com.example.mcpgateway.apitool.domain.repository.HttpToolRepository;
 import com.example.mcpgateway.apitool.domain.repository.ParameterMappingRepository;
+import com.example.mcpgateway.executor.HttpToolDefinition;
+import com.example.mcpgateway.executor.HttpToolExecutor;
+import com.example.mcpgateway.executor.ExecutionResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class HttpToolService {
     private final HttpToolRepository tools;
     private final ParameterMappingRepository mappings;
     private final SchemaConversionService schemaService;
+    private final HttpToolExecutor executor;
     public HttpToolService(HttpToolRepository tools, ParameterMappingRepository mappings,
-                           SchemaConversionService schemaService) {
+                           SchemaConversionService schemaService, HttpToolExecutor executor) {
         this.tools = tools; this.mappings = mappings; this.schemaService = schemaService;
+        this.executor = executor;
     }
 
     public List<HttpTool> list() { return tools.findAll(); }
@@ -93,9 +100,39 @@ public class HttpToolService {
         }
     }
 
+    // -- Online test --
+
+    public ExecutionResult testTool(TestToolRequest req) {
+        // Build parameter values from request
+        Map<String, Object> paramValues = req.parameterValues();
+
+        // Build HttpToolDefinition
+        List<HttpToolDefinition.ParameterMapping> defMappings = req.parameterMappings().stream()
+                .map(pm -> new HttpToolDefinition.ParameterMapping(
+                        pm.name(), pm.paramSource().name(), pm.paramLocation(),
+                        guessType(pm.schemaJson()), pm.required(), pm.description()))
+                .toList();
+
+        HttpToolDefinition definition = new HttpToolDefinition(
+                req.httpMethod(), req.urlTemplate(),
+                req.headers(),
+                defMappings);
+
+        return executor.execute(definition, paramValues);
+    }
+
     public record ParameterMappingRequest(
             String name, ParamSource paramSource, String paramLocation,
             String schemaJson, boolean required, String description) {}
+
+    public record TestToolRequest(
+            String httpMethod, String urlTemplate, String headers,
+            List<ParameterMapping> parameterMappings,
+            Map<String, Object> parameterValues,
+            AuthConfig authConfig) {
+
+        public record AuthConfig(String authType, String configJson) {}
+    }
 
     public static class ToolNotFoundException extends RuntimeException {
         public ToolNotFoundException(long id) { super("Tool not found: " + id); }

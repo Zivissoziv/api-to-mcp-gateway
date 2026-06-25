@@ -338,27 +338,12 @@ onMounted(load)
     </el-dialog>
 
     <!-- 发布弹窗 -->
-    <el-dialog v-model="publishDialog" title="发布 MCP Server" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="publishDialog" title="发布 MCP Server" width="420px" :close-on-click-modal="false">
       <template v-if="!publishResult">
-        <p style="margin-bottom: 16px;">发布后将对外提供服务，外部 MCP Client 可通过 MCP Key 认证后调用。</p>
-        <el-form label-position="top">
-          <el-form-item>
-            <el-checkbox v-model="publishAutoGenerate" label="自动生成 MCP Key" />
-          </el-form-item>
-          <el-form-item v-if="!publishAutoGenerate" label="自定义 MCP Key">
-            <el-input v-model="publishMcpKey" placeholder="输入自定义 Key，留空则自动生成" />
-          </el-form-item>
-        </el-form>
+        <p>确认发布吗？发布后将对外提供服务。</p>
       </template>
       <template v-else>
-        <el-alert type="success" title="发布成功" :description="'请妥善保管 MCP Key，关闭弹窗后将不再显示'" show-icon style="margin-bottom:16px" />
-        <div class="key-display">
-          <label>MCP Key</label>
-          <div class="key-row">
-            <code class="key-value">{{ publishResult.rawMcpKey }}</code>
-            <el-button size="small" @click="copyToClipboard(publishResult.rawMcpKey)">复制</el-button>
-          </div>
-        </div>
+        <el-alert type="success" title="发布成功" show-icon />
       </template>
       <template #footer>
         <el-button @click="publishDialog = false">{{ publishResult ? '关闭' : '取消' }}</el-button>
@@ -377,18 +362,10 @@ onMounted(load)
           <label>MCP 端点路径</label>
           <code>{{ connInfo.mcpPath }}</code>
         </div>
-        <div class="info-row" v-if="connInfo.mcpKey">
-          <label>MCP Key</label>
-          <div class="key-row">
-            <code class="key-value">{{ connInfo.mcpKey }}</code>
-            <el-button size="small" @click="copyToClipboard(connInfo.mcpKey!)">复制</el-button>
-          </div>
-        </div>
         <div class="info-row">
           <label>示例 curl</label>
           <pre class="curl-example">curl -X POST http://localhost:8080{{ connInfo.mcpPath }} \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer &lt;mcp-key&gt;" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
         </div>
         <div class="info-row">

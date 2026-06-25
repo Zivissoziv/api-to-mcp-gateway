@@ -99,3 +99,28 @@ export async function schemaToFields(schemaJson: string): Promise<SchemaField[]>
 export async function fieldsToSchema(fields: SchemaField[]): Promise<string> {
   return fetchJson('/api/schema/from-fields', { method: 'POST', body: JSON.stringify({ fields }) })
 }
+
+// ── Tool testing ──
+
+export interface TestResult {
+  success: boolean
+  statusCode: number
+  durationMs: number
+  requestSummary: { method: string; url: string; headers: Record<string, string> } | null
+  responseSummary: { statusCode: number; headers: Record<string, string>; body: string; bodyTruncated: boolean } | null
+  error: string | null
+  errorMessage: string | null
+}
+
+export interface TestToolRequest {
+  httpMethod: string
+  urlTemplate: string
+  headers: string
+  parameterMappings: ParamMapping[]
+  parameterValues: Record<string, any>
+  authConfig?: { authType: string; configJson: string }
+}
+
+export async function testTool(req: TestToolRequest): Promise<TestResult> {
+  return fetchJson('/api/http-tools/test', { method: 'POST', body: JSON.stringify(req) })
+}

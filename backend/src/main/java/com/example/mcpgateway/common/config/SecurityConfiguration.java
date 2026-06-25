@@ -25,7 +25,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/mcp/**").permitAll()
                         .requestMatchers("/api/users/**").hasRole("SYSTEM_ADMIN")
-                        .requestMatchers("/api/http-tools/**","/api/servers/**","/api/network-allowlist/**","/api/ai-config/**","/api/ai-chat/**").hasRole("SYSTEM_ADMIN")
+                        .requestMatchers("/api/http-tools/**","/api/servers/**","/api/ai-config/**","/api/ai-chat/**").hasRole("SYSTEM_ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwt,UsernamePasswordAuthenticationFilter.class)
                 .build();

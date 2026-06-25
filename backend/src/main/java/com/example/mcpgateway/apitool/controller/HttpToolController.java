@@ -2,10 +2,12 @@ package com.example.mcpgateway.apitool.controller;
 
 import com.example.mcpgateway.apitool.application.service.HttpToolService;
 import com.example.mcpgateway.apitool.application.service.HttpToolService.ParameterMappingRequest;
+import com.example.mcpgateway.apitool.application.service.HttpToolService.TestToolRequest;
 import com.example.mcpgateway.apitool.domain.model.HttpMethod;
 import com.example.mcpgateway.apitool.domain.model.HttpTool;
 import com.example.mcpgateway.apitool.domain.model.ParamSource;
 import com.example.mcpgateway.apitool.domain.model.ParameterMapping;
+import com.example.mcpgateway.executor.ExecutionResult;
 import com.example.mcpgateway.identity.infrastructure.security.JwtTokenService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -52,6 +54,11 @@ public class HttpToolController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable long id) { service.delete(id); }
+
+    @PostMapping("/test")
+    ExecutionResult test(@Valid @RequestBody TestToolRequest req) {
+        return service.testTool(req);
+    }
 
     private static List<ParameterMappingRequest> toService(List<ParamRequest> reqs) {
         if (reqs == null) return List.of();

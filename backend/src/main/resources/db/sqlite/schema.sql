@@ -90,17 +90,6 @@ CREATE TABLE IF NOT EXISTS mcp_server_tools (
     UNIQUE(server_id, tool_id)
 );
 
-CREATE TABLE IF NOT EXISTS network_allowlist (
-    id              INTEGER   NOT NULL PRIMARY KEY AUTOINCREMENT,
-    pattern         VARCHAR(256) NOT NULL,
-    pattern_type    VARCHAR(8) NOT NULL,
-    description     VARCHAR(512) NOT NULL DEFAULT '',
-    enabled         INTEGER   NOT NULL DEFAULT 1,
-    created_by      VARCHAR(36) NOT NULL,
-    created_at      VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
-);
-
 -- M6: MCP 调用记录
 CREATE TABLE IF NOT EXISTS gateway_calls (
     id              INTEGER   NOT NULL PRIMARY KEY AUTOINCREMENT,
