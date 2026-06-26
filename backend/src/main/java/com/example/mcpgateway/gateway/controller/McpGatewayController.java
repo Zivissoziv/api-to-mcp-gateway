@@ -191,6 +191,7 @@ public class McpGatewayController {
                     httpTool.httpMethod().name(),
                     httpTool.urlTemplate(),
                     httpTool.headers(),
+                    httpTool.bodyTemplate(),
                     defMappings);
 
             // Execute

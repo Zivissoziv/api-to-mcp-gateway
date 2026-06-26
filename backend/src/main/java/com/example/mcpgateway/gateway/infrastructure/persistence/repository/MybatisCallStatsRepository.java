@@ -118,10 +118,11 @@ public class MybatisCallStatsRepository implements CallStatsRepository {
         if (v instanceof java.sql.Timestamp ts) {
             return ts.toInstant();
         }
-        // SQLite returns String in "yyyy-MM-dd HH:mm:ss" format
+        // SQLite returns String in "yyyy-MM-dd HH:mm:ss" format (local time)
+        // Parse as local date-time and treat as +08:00 before converting to UTC Instant
         if (v instanceof String s && !s.isBlank()) {
             try {
-                return LocalDateTime.parse(s, ISO_FORMATTER).toInstant(ZoneOffset.UTC);
+                return LocalDateTime.parse(s, ISO_FORMATTER).toInstant(ZoneOffset.ofHours(8));
             } catch (Exception e) {
                 return null;
             }

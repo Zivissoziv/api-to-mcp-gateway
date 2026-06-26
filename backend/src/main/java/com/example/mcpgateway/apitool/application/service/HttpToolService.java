@@ -55,12 +55,14 @@ public class HttpToolService {
     @Transactional
     public HttpTool create(String name, String description, HttpMethod httpMethod,
                            String urlTemplate, String headers,
+                           String headerTemplate, String bodyTemplate,
                            String createdBy,
                            List<ParameterMappingRequest> parameterMappings) {
         if (tools.existsByName(name)) throw new DuplicateToolNameException(name);
         Instant now = Instant.now();
         HttpTool tool = tools.save(new HttpTool(
                 null, name, description, httpMethod, urlTemplate, headers,
+                headerTemplate, bodyTemplate,
                 null, ToolStatus.DRAFT, createdBy, now, now));
         saveMappings(tool.id(), parameterMappings, now);
         return tool;
@@ -69,13 +71,14 @@ public class HttpToolService {
     @Transactional
     public HttpTool update(long id, String name, String description, HttpMethod httpMethod,
                            String urlTemplate, String headers,
+                           String headerTemplate, String bodyTemplate,
                            List<ParameterMappingRequest> parameterMappings) {
         HttpTool existing = get(id);
         if (!existing.name().equals(name) && tools.existsByName(name))
             throw new DuplicateToolNameException(name);
         Instant now = Instant.now();
         HttpTool updated = new HttpTool(id, name, description, httpMethod, urlTemplate,
-                headers, existing.authConfigId(),
+                headers, headerTemplate, bodyTemplate, existing.authConfigId(),
                 existing.status(), existing.createdBy(), existing.createdAt(), now);
         tools.update(updated);
         mappings.deleteByToolId(id);
@@ -115,7 +118,7 @@ public class HttpToolService {
 
         HttpToolDefinition definition = new HttpToolDefinition(
                 req.httpMethod(), req.urlTemplate(),
-                req.headers(),
+                req.headers(), req.bodyTemplate(),
                 defMappings);
 
         return executor.execute(definition, paramValues);
@@ -126,7 +129,7 @@ public class HttpToolService {
             String schemaJson, boolean required, String description) {}
 
     public record TestToolRequest(
-            String httpMethod, String urlTemplate, String headers,
+            String httpMethod, String urlTemplate, String headers, String bodyTemplate,
             List<ParameterMapping> parameterMappings,
             Map<String, Object> parameterValues,
             AuthConfig authConfig) {

@@ -6,6 +6,7 @@ public record HttpToolDefinition(
         String httpMethod,
         String urlTemplate,
         String headers,
+        String bodyTemplate,
         List<ParameterMapping> parameterMappings
 ) {
     public record ParameterMapping(

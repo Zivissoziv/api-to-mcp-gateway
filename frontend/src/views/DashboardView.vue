@@ -21,7 +21,7 @@ onMounted(load)
     <p class="eyebrow">MCP GATEWAY</p>
     <h1>把企业 API，发布成可靠的 MCP 工具。</h1>
     <p class="summary">
-      当前已完成 Tool 配置、Server 编组和网络白名单管理。下一步将支持在线测试和发布快照。
+      当前已完成 Tool 配置、Server 编组、AI 聊天测试和调用统计。下一步将支持更多协议适配和运维监控。
     </p>
     <div class="stats-row">
       <div class="stat-card">

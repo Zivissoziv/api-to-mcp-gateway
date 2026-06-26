@@ -9,6 +9,8 @@ public record HttpTool(
         HttpMethod httpMethod,
         String urlTemplate,
         String headers,
+        String headerTemplate,
+        String bodyTemplate,
         Long authConfigId,
         ToolStatus status,
         String createdBy,

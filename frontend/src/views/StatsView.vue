@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import {
   getStatsByServer,
   getStatsByTool,
@@ -10,13 +10,35 @@ import {
   type IpCallStats,
   type ServerDetail,
 } from '../api/stats'
+import { Search } from '@element-plus/icons-vue'
 
 const activeTab = ref('server')
+
+const searchQuery = ref('')
 
 const servers = ref<ServerCallStats[]>([])
 const tools = ref<ToolCallStats[]>([])
 const ips = ref<IpCallStats[]>([])
 const loading = ref(false)
+
+const filteredServers = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return servers.value
+  return servers.value.filter(s => s.serverCode.toLowerCase().includes(q))
+})
+const filteredTools = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return tools.value
+  return tools.value.filter(t =>
+    t.serverCode.toLowerCase().includes(q) ||
+    (t.toolName || '').toLowerCase().includes(q)
+  )
+})
+const filteredIps = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return ips.value
+  return ips.value.filter(i => i.clientIp.includes(q))
+})
 
 const drillDialogVisible = ref(false)
 const drillServerCode = ref('')
@@ -72,11 +94,15 @@ onMounted(loadAll)
       <p class="page-intro">按 MCP 服务、接口、IP 维度查看调用数据。</p>
     </div>
 
+    <div class="search-bar">
+      <el-input v-model="searchQuery" placeholder="搜索服务编码、接口名称或 IP…" clearable prefix-icon="Search" />
+    </div>
+
     <el-tabs v-model="activeTab" class="stats-tabs">
       <!-- 按服务查看 -->
       <el-tab-pane label="按服务查看" name="server">
         <el-table
-          :data="servers"
+          :data="filteredServers"
           v-loading="loading"
           stripe
           style="width: 100%"
@@ -103,17 +129,17 @@ onMounted(loadAll)
       <!-- 按接口查看 -->
       <el-tab-pane label="按接口查看" name="tool">
         <el-table
-          :data="tools"
+          :data="filteredTools"
           v-loading="loading"
           stripe
           style="width: 100%"
         >
-          <el-table-column prop="serverCode" label="服务编码" min-width="140" />
-          <el-table-column prop="toolName" label="接口名称" min-width="160" />
-          <el-table-column prop="callCount" label="调用次数" width="100" sortable />
-          <el-table-column prop="successCount" label="成功次数" width="100" sortable />
-          <el-table-column prop="uniqueIps" label="唯一 IP" width="90" sortable />
-          <el-table-column prop="avgDurationMs" label="平均耗时" width="110" sortable>
+          <el-table-column prop="serverCode" label="服务编码" min-width="130" />
+          <el-table-column prop="toolName" label="接口名称" min-width="150" />
+          <el-table-column prop="callCount" label="调用次数" width="90" sortable />
+          <el-table-column prop="successCount" label="成功次数" width="90" sortable />
+          <el-table-column prop="uniqueIps" label="唯一 IP" width="80" sortable />
+          <el-table-column prop="avgDurationMs" label="平均耗时" width="100" sortable>
             <template #default="{ row }: { row: ToolCallStats }">
               {{ formatMs(row.avgDurationMs) }}
             </template>
@@ -130,7 +156,7 @@ onMounted(loadAll)
       <!-- 按 IP 查看 -->
       <el-tab-pane label="按 IP 查看" name="ip">
         <el-table
-          :data="ips"
+          :data="filteredIps"
           v-loading="loading"
           stripe
           style="width: 100%"
@@ -192,6 +218,9 @@ onMounted(loadAll)
 <style scoped>
 .stats-tabs {
   margin-top: 8px;
+}
+.stats-tabs :deep(.el-table) {
+  width: 100%;
 }
 .empty-hint {
   text-align: center;

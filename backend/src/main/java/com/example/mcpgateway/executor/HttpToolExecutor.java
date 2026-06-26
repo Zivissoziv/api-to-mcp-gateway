@@ -75,9 +75,29 @@ public class HttpToolExecutor {
             queryParams.forEach(uriBuilder::queryParam);
             URI finalUri = uriBuilder.build(true).toUri();
 
-            // 5. Execute
+            // 5. Build request body from bodyTemplate
+            String requestBody = null;
+            if (definition.bodyTemplate() != null && !definition.bodyTemplate().isBlank()) {
+                requestBody = definition.bodyTemplate();
+                // Replace ${paramName} placeholders with actual values from BODY-sourced params
+                for (var pm : definition.parameterMappings()) {
+                    if ("BODY".equals(pm.paramSource())) {
+                        Object val = paramValues.get(pm.name());
+                        if (val != null) {
+                            String placeholder = "${" + pm.name() + "}";
+                            requestBody = requestBody.replace(placeholder, val.toString());
+                        }
+                    }
+                }
+                // Auto-set Content-Type if not explicitly set
+                if (headers.getContentType() == null) {
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                }
+            }
+
+            // 6. Execute
             HttpMethod method = HttpMethod.valueOf(definition.httpMethod().toUpperCase());
-            HttpEntity<String> entity = new HttpEntity<>(null, headers);
+            HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
             ResponseEntity<String> response = restTemplate.exchange(finalUri, method, entity, String.class);
 
             long durationNs = System.nanoTime() - start;

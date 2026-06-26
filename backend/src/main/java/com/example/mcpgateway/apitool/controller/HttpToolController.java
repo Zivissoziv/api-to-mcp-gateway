@@ -41,14 +41,15 @@ public class HttpToolController {
     HttpTool create(@Valid @RequestBody UpsertRequest req, Authentication auth) {
         JwtTokenService.AuthenticatedUser user = (JwtTokenService.AuthenticatedUser) auth.getPrincipal();
         return service.create(req.name(), req.description(), req.httpMethod(),
-                req.urlTemplate(), req.headers(),
+                req.urlTemplate(), req.headers(), req.headerTemplate(), req.bodyTemplate(),
                 user.userId(), toService(req.parameterMappings()));
     }
 
     @PutMapping("/{id}")
     HttpTool update(@PathVariable long id, @Valid @RequestBody UpsertRequest req) {
         return service.update(id, req.name(), req.description(), req.httpMethod(),
-                req.urlTemplate(), req.headers(), toService(req.parameterMappings()));
+                req.urlTemplate(), req.headers(), req.headerTemplate(), req.bodyTemplate(),
+                toService(req.parameterMappings()));
     }
 
     @DeleteMapping("/{id}")
@@ -74,6 +75,6 @@ public class HttpToolController {
     public record UpsertRequest(
             @NotBlank String name, String description,
             @NotNull HttpMethod httpMethod, @NotBlank String urlTemplate,
-            String headers,
+            String headers, String headerTemplate, String bodyTemplate,
             List<ParamRequest> parameterMappings) {}
 }

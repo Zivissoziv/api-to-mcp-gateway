@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { listServers, createServer, updateServer, deleteServer, getServerTools, bindTool, unbindTool, publishServer, unpublishServer, getConnectionInfo, resetMcpKey } from '../api/servers'
 import type { McpServer, McpServerTool, ConnectionInfo } from '../api/servers'
 import { listTools, getMappings } from '../api/http-tools'
 import type { HttpTool, ParamMapping } from '../api/http-tools'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, Search } from '@element-plus/icons-vue'
 
 function handleCmd(cmd: string, s: McpServer) {
   switch (cmd) {
@@ -21,6 +21,16 @@ function handleCmd(cmd: string, s: McpServer) {
 
 const servers = ref<McpServer[]>([])
 const loading = ref(false)
+const searchQuery = ref('')
+const filteredServers = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return servers.value
+  return servers.value.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    s.code.toLowerCase().includes(q) ||
+    (s.description || '').toLowerCase().includes(q)
+  )
+})
 
 // 创建/编辑弹窗
 const formDialog = ref(false)
@@ -230,7 +240,11 @@ onMounted(load)
       <el-button type="primary" @click="openCreate">+ 新建服务</el-button>
     </header>
 
-    <el-table v-loading="loading" :data="servers" stripe style="width:100%">
+    <div class="search-bar">
+      <el-input v-model="searchQuery" placeholder="搜索服务名称、端点或描述…" clearable prefix-icon="Search" />
+    </div>
+
+    <el-table v-loading="loading" :data="filteredServers" stripe style="width:100%">
       <el-table-column type="index" label="#" width="50" />
       <el-table-column prop="name" label="名称" width="140" />
       <el-table-column label="绑定工具" width="80">

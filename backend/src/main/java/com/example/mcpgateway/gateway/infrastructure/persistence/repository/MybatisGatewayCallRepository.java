@@ -28,6 +28,7 @@ public class MybatisGatewayCallRepository implements GatewayCallRepository {
         r.statusCode = c.statusCode();
         r.durationMs = (int) c.durationMs();
         r.errorSummary = c.errorSummary();
+        r.createdAt = c.createdAt().atZone(ZoneOffset.ofHours(8)).toLocalDateTime();
         return r;
     }
 }

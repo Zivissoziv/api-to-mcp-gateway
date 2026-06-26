@@ -53,7 +53,7 @@ export async function getMappings(toolId: number): Promise<ParamMapping[]> {
 
 export async function createTool(data: {
   name: string; description?: string; httpMethod: string; urlTemplate: string
-  headers?: string; parameterMappings: ParamMapping[]
+  headers?: string; headerTemplate?: string; bodyTemplate?: string; parameterMappings: ParamMapping[]
 }): Promise<HttpTool> {
   return fetchJson('/api/http-tools', {
     method: 'POST',
@@ -63,7 +63,7 @@ export async function createTool(data: {
 
 export async function updateTool(id: number, data: {
   name: string; description?: string; httpMethod: string; urlTemplate: string
-  headers?: string; parameterMappings: ParamMapping[]
+  headers?: string; headerTemplate?: string; bodyTemplate?: string; parameterMappings: ParamMapping[]
 }): Promise<HttpTool> {
   return fetchJson(`/api/http-tools/${id}`, {
     method: 'PUT',
@@ -116,6 +116,7 @@ export interface TestToolRequest {
   httpMethod: string
   urlTemplate: string
   headers: string
+  bodyTemplate?: string | null
   parameterMappings: ParamMapping[]
   parameterValues: Record<string, any>
   authConfig?: { authType: string; configJson: string }

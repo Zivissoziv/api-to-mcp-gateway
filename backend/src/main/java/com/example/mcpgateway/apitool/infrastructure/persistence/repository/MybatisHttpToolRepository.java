@@ -43,7 +43,7 @@ public class MybatisHttpToolRepository implements HttpToolRepository {
 
     private HttpTool domain(HttpToolRow r) {
         return new HttpTool(r.id, r.name, r.description, HttpMethod.valueOf(r.httpMethod),
-                r.urlTemplate, r.headers, r.authConfigId,
+                r.urlTemplate, r.headers, r.headerTemplate, r.bodyTemplate, r.authConfigId,
                 ToolStatus.valueOf(r.status), r.createdBy,
                 r.createdAt.toInstant(ZoneOffset.UTC), r.updatedAt.toInstant(ZoneOffset.UTC));
     }
@@ -51,7 +51,8 @@ public class MybatisHttpToolRepository implements HttpToolRepository {
         HttpToolRow r = new HttpToolRow();
         r.id = t.id(); r.name = t.name(); r.description = t.description();
         r.httpMethod = t.httpMethod().name(); r.urlTemplate = t.urlTemplate();
-        r.headers = t.headers(); r.authConfigId = t.authConfigId();
+        r.headers = t.headers(); r.headerTemplate = t.headerTemplate(); r.bodyTemplate = t.bodyTemplate();
+        r.authConfigId = t.authConfigId();
         r.status = t.status().name(); r.createdBy = t.createdBy();
         if (t.createdAt() != null) r.createdAt = t.createdAt().atZone(ZoneOffset.UTC).toLocalDateTime();
         if (t.updatedAt() != null) r.updatedAt = t.updatedAt().atZone(ZoneOffset.UTC).toLocalDateTime();

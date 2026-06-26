@@ -3,9 +3,20 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { listTools, createTool, updateTool, deleteTool, getMappings, testTool } from '../api/http-tools'
 import type { HttpTool, ParamMapping, TestResult } from '../api/http-tools'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 
 const tools = ref<HttpTool[]>([])
 const loading = ref(false)
+const searchQuery = ref('')
+const filteredTools = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return tools.value
+  return tools.value.filter(t =>
+    t.name.toLowerCase().includes(q) ||
+    (t.description || '').toLowerCase().includes(q) ||
+    t.urlTemplate.toLowerCase().includes(q)
+  )
+})
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const currentStep = ref(1)
@@ -276,6 +287,7 @@ async function executeTest() {
         headerTemplate.value || '',
         form.value.headers || '',
       ].filter(Boolean).join('\n'),
+      bodyTemplate: bodyTemplate.value || null,
       parameterMappings: buildParamMappings(),
       parameterValues: vals,
     })
@@ -356,7 +368,11 @@ onMounted(load)
       <el-button type="primary" @click="openCreate">+ 注册接口</el-button>
     </header>
 
-    <el-table v-loading="loading" :data="tools" stripe style="width:100%">
+    <div class="search-bar">
+      <el-input v-model="searchQuery" placeholder="搜索接口名称、描述或 URL…" clearable prefix-icon="Search" />
+    </div>
+
+    <el-table v-loading="loading" :data="filteredTools" stripe style="width:100%">
       <el-table-column type="index" label="#" width="50" />
       <el-table-column prop="name" label="名称" />
       <el-table-column label="方法" width="90">

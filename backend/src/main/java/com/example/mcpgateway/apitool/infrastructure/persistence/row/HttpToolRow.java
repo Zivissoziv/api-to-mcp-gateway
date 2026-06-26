@@ -13,6 +13,8 @@ public class HttpToolRow {
     public String httpMethod;
     public String urlTemplate;
     public String headers;
+    public String headerTemplate;
+    public String bodyTemplate;
     public Long authConfigId;
     public String status;
     public String createdBy;
