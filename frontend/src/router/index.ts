@@ -29,6 +29,11 @@ const router = createRouter({
           component: McpServersView,
         },
         {
+          path: 'stats',
+          name: 'stats',
+          component: () => import('../views/StatsView.vue'),
+        },
+        {
           path: 'ai-chat',
           name: 'ai-chat',
           component: AiChatView,

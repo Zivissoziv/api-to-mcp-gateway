@@ -10,6 +10,7 @@ public class McpServerAuthRow {
     @TableId(type = IdType.AUTO) public Long id;
     public Long serverId;
     public String mcpKeyHash;
+    public String mcpKeyEnc;
     public LocalDateTime createdAt;
     public LocalDateTime updatedAt;
 

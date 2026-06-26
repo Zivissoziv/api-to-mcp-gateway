@@ -48,5 +48,11 @@ app:
     encryption-key: ${ENCRYPTION_KEY:change-this-encryption-key-32bytes!}
 
 logging:
+  file:
+    name: ./logs/mcp-gateway.log
   pattern:
     level: "%5p [traceId=%X{traceId:-}]"
+  logback:
+    rollingpolicy:
+      max-history: 3
+      max-file-size: 50MB

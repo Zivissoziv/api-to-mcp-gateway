@@ -38,7 +38,7 @@ public class MybatisMcpServerAuthRepository implements McpServerAuthRepository {
     }
 
     private McpServerAuth domain(McpServerAuthRow r) {
-        return new McpServerAuth(r.id, r.serverId, r.mcpKeyHash,
+        return new McpServerAuth(r.id, r.serverId, r.mcpKeyHash, r.mcpKeyEnc,
                 r.createdAt.toInstant(ZoneOffset.UTC), r.updatedAt.toInstant(ZoneOffset.UTC));
     }
 
@@ -47,6 +47,7 @@ public class MybatisMcpServerAuthRepository implements McpServerAuthRepository {
         if (e.id() != null) r.id = e.id();
         r.serverId = e.serverId();
         r.mcpKeyHash = e.mcpKeyHash();
+        r.mcpKeyEnc = e.mcpKeyEnc();
         return r;
     }
 }

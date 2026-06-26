@@ -6,6 +6,7 @@ public record McpServerAuth(
         Long id,
         Long serverId,
         String mcpKeyHash,
+        String mcpKeyEnc,
         Instant createdAt,
         Instant updatedAt
 ) {}

@@ -2,14 +2,16 @@
 import { ref, onMounted } from 'vue'
 import { listTools } from '../api/http-tools'
 import { listServers } from '../api/servers'
+import { getSummary } from '../api/stats'
 
 const toolCount = ref(0)
 const serverCount = ref(0)
-const callCount = ref('—') // ponytail: 调用次数等调用记录功能上线后做实
+const callCount = ref(0)
 
 async function load() {
   try { toolCount.value = (await listTools()).length } catch { }
   try { serverCount.value = (await listServers()).length } catch { }
+  try { const s = await getSummary(); callCount.value = s.totalCalls } catch { }
 }
 onMounted(load)
 </script>

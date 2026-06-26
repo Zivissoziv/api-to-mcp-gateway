@@ -72,7 +72,7 @@ public class McpServerController {
     @GetMapping("/{id}/connection-info")
     ConnectionInfo connectionInfo(@PathVariable long id) {
         McpServer server = service.get(id);
-        String mcpKey = service.getMcpKey(id);
+        String mcpKey = service.getRawMcpKey(id);
         return new ConnectionInfo(server.code(), "/mcp/" + server.code(), mcpKey);
     }
 

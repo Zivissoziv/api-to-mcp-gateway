@@ -3,6 +3,7 @@ package com.example.mcpgateway.apitool.application.service;
 import com.example.mcpgateway.apitool.domain.model.*;
 import com.example.mcpgateway.apitool.domain.repository.McpServerRepository;
 import com.example.mcpgateway.apitool.domain.repository.McpServerToolRepository;
+import com.example.mcpgateway.common.crypto.EncryptionService;
 import com.example.mcpgateway.gateway.domain.model.McpServerAuth;
 import com.example.mcpgateway.gateway.domain.repository.McpServerAuthRepository;
 import com.example.mcpgateway.identity.infrastructure.security.BcryptPasswordService;
@@ -19,10 +20,14 @@ public class McpServerService {
     private final McpServerToolRepository serverTools;
     private final McpServerAuthRepository authRepo;
     private final BcryptPasswordService passwords;
+    private final EncryptionService encryption;
+
     public McpServerService(McpServerRepository servers, McpServerToolRepository serverTools,
-                            McpServerAuthRepository authRepo, BcryptPasswordService passwords) {
+                            McpServerAuthRepository authRepo, BcryptPasswordService passwords,
+                            EncryptionService encryption) {
         this.servers = servers; this.serverTools = serverTools;
         this.authRepo = authRepo; this.passwords = passwords;
+        this.encryption = encryption;
     }
 
     public List<McpServer> list() { return servers.findAll(); }
@@ -93,15 +98,16 @@ public class McpServerService {
 
         String rawKey = (mcpKey != null && !mcpKey.isBlank()) ? mcpKey : UUID.randomUUID().toString();
         String keyHash = passwords.encode(rawKey);
+        String keyEnc = encryption.encrypt(rawKey);
         Instant now = Instant.now();
 
         // Upsert MCP Key
         var existingAuth = authRepo.findByServerId(id);
         if (existingAuth.isPresent()) {
-            authRepo.update(new McpServerAuth(existingAuth.get().id(), id, keyHash,
+            authRepo.update(new McpServerAuth(existingAuth.get().id(), id, keyHash, keyEnc,
                     existingAuth.get().createdAt(), now));
         } else {
-            authRepo.save(new McpServerAuth(null, id, keyHash, now, now));
+            authRepo.save(new McpServerAuth(null, id, keyHash, keyEnc, now, now));
         }
 
         // Update server status
@@ -129,16 +135,37 @@ public class McpServerService {
         get(id); // validate exists
         String rawKey = (newKey != null && !newKey.isBlank()) ? newKey : UUID.randomUUID().toString();
         String keyHash = passwords.encode(rawKey);
+        String keyEnc = encryption.encrypt(rawKey);
         Instant now = Instant.now();
         var existing = authRepo.findByServerId(id)
                 .orElseThrow(() -> new ServerNotConfiguredException(id));
-        authRepo.update(new McpServerAuth(existing.id(), id, keyHash, existing.createdAt(), now));
+        authRepo.update(new McpServerAuth(existing.id(), id, keyHash, keyEnc, existing.createdAt(), now));
         return rawKey;
     }
 
     public String getMcpKey(long id) {
         get(id); // validate exists
         return authRepo.findByServerId(id).map(a -> a.mcpKeyHash()).orElse(null);
+    }
+
+    /** Return the raw (plaintext) MCP key — decrypted from the stored encrypted copy.
+     *  If no encrypted key exists yet (e.g. upgraded from an older version), a new key
+     *  is generated, encrypted, and persisted automatically. */
+    @Transactional
+    public String getRawMcpKey(long id) {
+        get(id); // validate exists
+        var auth = authRepo.findByServerId(id).orElse(null);
+        if (auth == null) return null;
+        if (auth.mcpKeyEnc() != null) {
+            return encryption.decrypt(auth.mcpKeyEnc());
+        }
+        // No encrypted key stored — generate a new one
+        String rawKey = UUID.randomUUID().toString();
+        String keyHash = passwords.encode(rawKey);
+        String keyEnc = encryption.encrypt(rawKey);
+        Instant now = Instant.now();
+        authRepo.update(new McpServerAuth(auth.id(), id, keyHash, keyEnc, auth.createdAt(), now));
+        return rawKey;
     }
 
     public record PublishResult(String rawMcpKey, McpServer server) {}

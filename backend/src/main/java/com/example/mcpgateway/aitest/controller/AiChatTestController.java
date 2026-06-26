@@ -14,7 +14,7 @@ public class AiChatTestController {
 
     @PostMapping("/sessions")
     AiChatSessionManager.SessionInfo createSession(@Valid @RequestBody CreateSessionRequest req) {
-        return sessionManager.startSession(req.serverId(), req.modelConfigId());
+        return sessionManager.startSession(req.serverId(), req.modelConfigId(), req.mcpKey());
     }
 
     @PostMapping("/sessions/{sessionId}/chat")
@@ -27,6 +27,6 @@ public class AiChatTestController {
         sessionManager.closeSession(sessionId);
     }
 
-    public record CreateSessionRequest(@NotNull Long serverId, @NotNull Long modelConfigId) {}
+    public record CreateSessionRequest(@NotNull Long serverId, @NotNull Long modelConfigId, String mcpKey) {}
     public record ChatRequest(@NotBlank String message) {}
 }

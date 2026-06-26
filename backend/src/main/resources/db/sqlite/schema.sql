@@ -110,10 +110,14 @@ CREATE TABLE IF NOT EXISTS mcp_server_auth (
     id              INTEGER   NOT NULL PRIMARY KEY AUTOINCREMENT,
     server_id       INTEGER   NOT NULL UNIQUE,
     mcp_key_hash    VARCHAR(100) NOT NULL,
+    mcp_key_enc     VARCHAR(1000),
     created_at      VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (server_id) REFERENCES mcp_servers(id)
 );
+
+-- Migration: add mcp_key_enc if missing (V5) — SQLite doesn't support IF NOT EXISTS for ADD COLUMN
+ALTER TABLE mcp_server_auth ADD COLUMN mcp_key_enc VARCHAR(1000);
 
 -- M7: AI 模型配置
 CREATE TABLE IF NOT EXISTS ai_model_configs (

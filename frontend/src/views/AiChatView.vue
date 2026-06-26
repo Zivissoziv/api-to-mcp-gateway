@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, nextTick } from 'vue'
 import { createSession, sendChatMessage, closeSession } from '../api/ai-chat'
-import { listServers } from '../api/servers'
+import { listServers, getConnectionInfo } from '../api/servers'
 import { listConfigs, createConfig, updateConfig, deleteConfig } from '../api/ai-config'
 import type { McpServer } from '../api/servers'
 import type { AiModelConfig } from '../api/ai-config'
@@ -14,6 +14,7 @@ const configs = ref<AiModelConfig[]>([])
 const session = ref<SessionInfo | null>(null)
 const selectedServerId = ref<number | null>(null)
 const selectedConfigId = ref<number | null>(null)
+const mcpKeyLoading = ref(false)
 const messages = ref<{ role: string; content: string; toolCalls?: ToolCallInfo[] }[]>([])
 const inputText = ref('')
 const sending = ref(false)
@@ -38,6 +39,20 @@ async function load() {
   configs.value = await listConfigs()
 }
 
+async function onServerChange() {
+  if (!selectedServerId.value) return
+  mcpKeyLoading.value = true
+  try {
+    const info = await getConnectionInfo(selectedServerId.value)
+    if (info.mcpKey) {
+      // stored for use in startSession
+      ;(window as any).__mcpKeyCache = info.mcpKey
+    }
+  } catch { /* ignore */ } finally {
+    mcpKeyLoading.value = false
+  }
+}
+
 async function startSession() {
   if (!selectedServerId.value || !selectedConfigId.value) {
     ElMessage.warning('请选择 Server 和模型配置')
@@ -47,7 +62,8 @@ async function startSession() {
     if (session.value) {
       await closeSession(session.value.sessionId).catch(() => {})
     }
-    session.value = await createSession(selectedServerId.value, selectedConfigId.value)
+    const mcpKey = (window as any).__mcpKeyCache || undefined
+    session.value = await createSession(selectedServerId.value, selectedConfigId.value, mcpKey)
     messages.value = []
     messages.value.push({
       role: 'system',
@@ -124,6 +140,8 @@ async function removeConfig(c: AiModelConfig) {
   } catch { /* cancelled */ }
 }
 
+watch(selectedServerId, () => { onServerChange() })
+
 onMounted(load)
 </script>
 
@@ -157,7 +175,7 @@ onMounted(load)
             </el-option>
           </el-select>
         </div>
-        <el-button type="primary" style="width:100%;margin-bottom:16px" :disabled="!selectedServerId || !selectedConfigId" @click="startSession">开始会话</el-button>
+        <el-button type="primary" style="width:100%;margin-bottom:16px" :disabled="!selectedServerId || !selectedConfigId || mcpKeyLoading" @click="startSession">{{ mcpKeyLoading ? '加载中…' : '开始会话' }}</el-button>
 
         <div v-if="session" class="sidebar-section">
           <label class="field-label">已加载 Tool（{{ session.tools.length }}）</label>

@@ -36,10 +36,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return fixIds(await res.json()) as T
 }
 
-export async function createSession(serverId: number, modelConfigId: number): Promise<SessionInfo> {
+export async function createSession(serverId: number, modelConfigId: number, mcpKey?: string): Promise<SessionInfo> {
   return fetchJson('/api/ai-chat/sessions', {
     method: 'POST',
-    body: JSON.stringify({ serverId, modelConfigId }),
+    body: JSON.stringify({ serverId, modelConfigId, mcpKey }),
   })
 }
 

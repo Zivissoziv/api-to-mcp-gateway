@@ -2,17 +2,10 @@ package com.example.mcpgateway.aitest.application.service;
 
 import com.example.mcpgateway.aitest.domain.model.AiModelConfig;
 import com.example.mcpgateway.aitest.domain.repository.AiModelConfigRepository;
-import com.example.mcpgateway.apitool.domain.model.HttpTool;
-import com.example.mcpgateway.apitool.domain.model.ParameterMapping;
-import com.example.mcpgateway.apitool.domain.repository.HttpToolRepository;
-import com.example.mcpgateway.apitool.domain.repository.ParameterMappingRepository;
 import com.example.mcpgateway.common.crypto.EncryptionService;
-import com.example.mcpgateway.executor.HttpToolDefinition;
-import com.example.mcpgateway.executor.HttpToolExecutor;
 import com.example.mcpgateway.gateway.application.service.McpServerProvider;
 import com.example.mcpgateway.gateway.domain.model.PublishedServer;
 import com.example.mcpgateway.gateway.domain.model.PublishedTool;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -28,6 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Manages AI chat sessions. Each session pairs a PublishedServer's tools
  * with an OpenAI-compatible chat model for natural-language testing.
+ *
+ * Tool invocations go through the real MCP gateway HTTP endpoint (/mcp/{serverCode})
+ * so they are recorded in gateway_calls and tested exactly as a real client would use them.
  */
 @Service
 public class AiChatSessionManager {
@@ -38,24 +34,19 @@ public class AiChatSessionManager {
     private final McpServerProvider serverProvider;
     private final AiModelConfigRepository configRepo;
     private final EncryptionService encryption;
-    private final HttpToolRepository httpTools;
-    private final ParameterMappingRepository paramMappings;
-    private final HttpToolExecutor executor;
+    private final RestClient httpClient;
 
     private final Map<String, ChatSession> sessions = new ConcurrentHashMap<>();
 
     public AiChatSessionManager(McpServerProvider serverProvider, AiModelConfigRepository configRepo,
-                                 EncryptionService encryption, HttpToolRepository httpTools,
-                                 ParameterMappingRepository paramMappings, HttpToolExecutor executor) {
+                                 EncryptionService encryption) {
         this.serverProvider = serverProvider;
         this.configRepo = configRepo;
         this.encryption = encryption;
-        this.httpTools = httpTools;
-        this.paramMappings = paramMappings;
-        this.executor = executor;
+        this.httpClient = RestClient.builder().build();
     }
 
-    public SessionInfo startSession(long serverId, long modelConfigId) {
+    public SessionInfo startSession(long serverId, long modelConfigId, String mcpKey) {
         // 1. Load server
         PublishedServer server = serverProvider.loadById(serverId)
                 .orElseThrow(() -> new IllegalArgumentException("Server not found or not published: " + serverId));
@@ -65,11 +56,15 @@ public class AiChatSessionManager {
                 .orElseThrow(() -> new IllegalArgumentException("Model config not found: " + modelConfigId));
         String apiKey = encryption.decrypt(config.apiKeyEnc());
 
-        // 3. Create session
+        // 3. Use user-provided MCP key to authenticate to the gateway
+        log.info("AI chat session start: serverId={} serverCode={} hasMcpKey={}", serverId, server.code(),
+                mcpKey != null && !mcpKey.isBlank());
+
+        // 4. Create session
         String sessionId = UUID.randomUUID().toString();
         List<String> toolNames = server.tools().stream().map(PublishedTool::name).toList();
 
-        ChatSession session = new ChatSession(sessionId, server, config, apiKey);
+        ChatSession session = new ChatSession(sessionId, server, config, apiKey, mcpKey);
         sessions.put(sessionId, session);
 
         return new SessionInfo(sessionId, server.name(), server.code(), toolNames);
@@ -113,19 +108,8 @@ public class AiChatSessionManager {
                     String argumentsJson = tc.get("function").get("arguments").asText();
                     String callId = tc.get("id").asText();
 
-                    // Parse arguments
-                    JsonNode args = mapper.readTree(argumentsJson);
-                    Map<String, Object> paramValues = new HashMap<>();
-                    args.fieldNames().forEachRemaining(key -> {
-                        JsonNode val = args.get(key);
-                        if (val.isTextual()) paramValues.put(key, val.asText());
-                        else if (val.isNumber()) paramValues.put(key, val.numberValue());
-                        else if (val.isBoolean()) paramValues.put(key, val.booleanValue());
-                        else if (!val.isNull()) paramValues.put(key, val.toString());
-                    });
-
-                    // Execute tool
-                    ToolCallInfo result = executeToolCall(session, originalName, paramValues, callId);
+                    // Execute tool via real MCP gateway HTTP endpoint
+                    ToolCallInfo result = executeToolCallViaGateway(session, originalName, argumentsJson);
                     toolCalls.add(result);
 
                     // Add tool result to messages
@@ -166,44 +150,98 @@ public class AiChatSessionManager {
         sessions.remove(sessionId);
     }
 
-    private ToolCallInfo executeToolCall(ChatSession session, String toolName,
-                                          Map<String, Object> paramValues, String callId) {
-        PublishedTool tool = session.server.tools().stream()
-                .filter(t -> t.name().equals(toolName))
-                .findFirst().orElse(null);
-        if (tool == null) {
-            return new ToolCallInfo(toolName, paramValues, null, false, 0, "Tool not found: " + toolName);
+    /**
+     * Execute an MCP tool call through the real MCP gateway HTTP endpoint,
+     * exactly as a real MCP client would. This ensures the call is recorded
+     * in gateway_calls and exercises the full production code path.
+     */
+    private ToolCallInfo executeToolCallViaGateway(ChatSession session, String toolName, String argumentsJson) {
+        if (session.mcpKey == null || session.mcpKey.isBlank()) {
+            log.warn("No MCP key available for server={}, cannot call gateway", session.server.code());
+            return new ToolCallInfo(toolName, Map.of(), "Error: MCP key not available", false, 0, "MCP key not available");
         }
 
         try {
-            HttpTool httpTool = httpTools.findById(tool.id())
-                    .orElseThrow(() -> new RuntimeException("Tool DB record not found: " + tool.id()));
-
-            List<ParameterMapping> mappings = paramMappings.findByToolId(httpTool.id());
-            List<HttpToolDefinition.ParameterMapping> defMappings = mappings.stream()
-                    .map(pm -> new HttpToolDefinition.ParameterMapping(
-                            pm.name(), pm.paramSource().name(), pm.paramLocation(),
-                            resolveType(pm.schemaJson()), pm.required(), pm.description()))
-                    .toList();
-
-            HttpToolDefinition definition = new HttpToolDefinition(
-                    httpTool.httpMethod().name(), httpTool.urlTemplate(),
-                    httpTool.headers(), defMappings);
-
-            var result = executor.execute(definition, paramValues);
-
-            String resultText;
-            if (result.success()) {
-                resultText = result.responseSummary() != null ? result.responseSummary().body() : "(empty response)";
-            } else {
-                resultText = "Error: " + (result.errorMessage() != null ? result.errorMessage() : "Unknown error");
+            // Build the JSON-RPC tools/call request body
+            ObjectNode jsonRpcRequest = mapper.createObjectNode();
+            jsonRpcRequest.put("jsonrpc", "2.0");
+            jsonRpcRequest.put("id", "ai-" + UUID.randomUUID().toString().substring(0, 8));
+            jsonRpcRequest.put("method", "tools/call");
+            ObjectNode params = jsonRpcRequest.putObject("params");
+            params.put("name", toolName);
+            try {
+                JsonNode args = mapper.readTree(argumentsJson);
+                params.set("arguments", args);
+            } catch (Exception e) {
+                params.putObject("arguments");
             }
 
-            return new ToolCallInfo(toolName, paramValues, resultText, result.success(),
-                    result.statusCode(), result.errorMessage());
+            String requestJson = mapper.writeValueAsString(jsonRpcRequest);
+            String mcpUrl = "http://localhost:" + guessPort() + "/mcp/" + session.server.code();
+
+            log.info("→ MCP gateway POST {} tool={}", mcpUrl, toolName);
+
+            // POST to local MCP gateway endpoint — use exchange() to capture non-2xx responses
+            var responseEntity = httpClient.post()
+                    .uri(mcpUrl)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + session.mcpKey)
+                    .body(requestJson)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            int httpStatus = responseEntity.getStatusCode().value();
+            String responseJson = responseEntity.getBody();
+
+            log.info("← MCP gateway HTTP {} tool={} bodyLength={}", httpStatus, toolName,
+                    responseJson != null ? responseJson.length() : 0);
+
+            if (responseJson == null || responseJson.isBlank()) {
+                return new ToolCallInfo(toolName, Map.of(), "Error: empty response from gateway", false, httpStatus, "Empty response");
+            }
+
+            // Parse JSON-RPC response
+            JsonNode response = mapper.readTree(responseJson);
+            if (response.has("error")) {
+                JsonNode err = response.get("error");
+                String errMsg = err.has("message") ? err.get("message").asText() : "MCP error";
+                log.warn("← MCP gateway error tool={} code={} msg={}", toolName,
+                        err.has("code") ? err.get("code").asInt() : -1, errMsg);
+                return new ToolCallInfo(toolName, Map.of(), "Error: " + errMsg, false, 0, errMsg);
+            }
+
+            // Extract text content from result.content[]
+            JsonNode result = response.get("result");
+            String text = "";
+            if (result != null && result.has("content") && result.get("content").isArray()) {
+                StringBuilder sb = new StringBuilder();
+                for (JsonNode item : result.get("content")) {
+                    JsonNode type = item.get("type");
+                    if (type != null && "text".equals(type.asText())) {
+                        sb.append(item.has("text") ? item.get("text").asText() : "");
+                    }
+                }
+                text = sb.toString();
+            }
+
+            boolean isError = result != null && result.has("isError") && result.get("isError").asBoolean();
+            if (!isError) {
+                log.info("← MCP gateway success tool={} resultLength={}", toolName, text.length());
+            }
+            return new ToolCallInfo(toolName, Map.of(), text, !isError, isError ? -1 : 0, isError ? "MCP error" : null);
+
         } catch (Exception e) {
-            return new ToolCallInfo(toolName, paramValues, null, false, 0, e.getMessage());
+            log.error("← MCP gateway exception server={} tool={}: {}", session.server.code(), toolName, e.toString());
+            return new ToolCallInfo(toolName, Map.of(), null, false, 0, e.getMessage());
         }
+    }
+
+    private int guessPort() {
+        String port = System.getProperty("server.port");
+        if (port != null) return Integer.parseInt(port);
+        port = System.getenv("SERVER_PORT");
+        if (port != null) return Integer.parseInt(port);
+        return 8080;
     }
 
     private ObjectNode buildChatRequest(ChatSession session) {
@@ -282,16 +320,6 @@ public class AiChatSessionManager {
         return name.replaceAll("[^a-zA-Z0-9_-]", "_");
     }
 
-    private String resolveType(String schemaJson) {
-        if (schemaJson == null || schemaJson.isBlank()) return "string";
-        try {
-            var node = mapper.readTree(schemaJson);
-            return node.has("type") ? node.get("type").asText() : "string";
-        } catch (Exception e) {
-            return "string";
-        }
-    }
-
     // -- Data types --
 
     public record SessionInfo(String sessionId, String serverName, String serverCode, List<String> tools) {}
@@ -307,15 +335,17 @@ public class AiChatSessionManager {
         final String baseUrl;
         final String apiKey;
         final String model;
+        final String mcpKey;
         final Map<String, String> fnNameMap = new HashMap<>(); // sanitized -> original
         final List<ObjectNode> messages = new ArrayList<>();
 
-        ChatSession(String sessionId, PublishedServer server, AiModelConfig config, String apiKey) {
+        ChatSession(String sessionId, PublishedServer server, AiModelConfig config, String apiKey, String mcpKey) {
             this.sessionId = sessionId;
             this.server = server;
             this.baseUrl = config.baseUrl();
             this.apiKey = apiKey;
             this.model = config.model();
+            this.mcpKey = mcpKey;
         }
     }
 }

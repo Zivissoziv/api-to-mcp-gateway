@@ -272,14 +272,16 @@ onMounted(load)
     <!-- 创建/编辑弹窗 -->
     <el-dialog v-model="formDialog" :title="editing ? '编辑服务' : '新建服务'" width="520px">
       <el-form label-position="top">
-        <el-form-item label="代码" required>
+        <el-form-item label="MCP 端点" required>
           <el-input v-model="form.code" placeholder="my-api-server" />
+          <p class="form-hint">唯一标识，作为 MCP 请求路径的一部分，创建后不可修改。如：/mcp/my-api-server</p>
         </el-form-item>
         <el-form-item label="名称" required>
-          <el-input v-model="form.name" />
+          <el-input v-model="form.name" placeholder="例如：用户服务、订单服务" />
+          <p class="form-hint">给这个 MCP 服务起个容易识别的名字</p>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="简单说明这个服务的作用…" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -338,12 +340,19 @@ onMounted(load)
     </el-dialog>
 
     <!-- 发布弹窗 -->
-    <el-dialog v-model="publishDialog" title="发布 MCP Server" width="420px" :close-on-click-modal="false">
+    <el-dialog v-model="publishDialog" title="发布 MCP Server" width="520px" :close-on-click-modal="false">
       <template v-if="!publishResult">
-        <p>确认发布吗？发布后将对外提供服务。</p>
+        <p style="margin-bottom:16px">发布后将对外提供服务。MCP Key 自动生成，可在连接信息中查看。</p>
       </template>
       <template v-else>
-        <el-alert type="success" title="发布成功" show-icon />
+        <el-alert type="success" title="发布成功" show-icon style="margin-bottom:16px" />
+        <div class="key-display">
+          <label>MCP Key</label>
+          <div class="key-row">
+            <code class="key-value">{{ publishResult.rawMcpKey }}</code>
+            <el-button size="small" @click="copyToClipboard(publishResult.rawMcpKey)">复制</el-button>
+          </div>
+        </div>
       </template>
       <template #footer>
         <el-button @click="publishDialog = false">{{ publishResult ? '关闭' : '取消' }}</el-button>
@@ -362,10 +371,18 @@ onMounted(load)
           <label>MCP 端点路径</label>
           <code>{{ connInfo.mcpPath }}</code>
         </div>
+        <div class="info-row" v-if="connInfo.mcpKey">
+          <label>MCP Key</label>
+          <div class="key-row">
+            <code class="key-value">{{ connInfo.mcpKey }}</code>
+            <el-button size="small" @click="copyToClipboard(connInfo.mcpKey!)">复制</el-button>
+          </div>
+        </div>
         <div class="info-row">
           <label>示例 curl</label>
           <pre class="curl-example">curl -X POST http://localhost:8080{{ connInfo.mcpPath }} \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer &lt;mcp-key&gt;" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
         </div>
         <div class="info-row">

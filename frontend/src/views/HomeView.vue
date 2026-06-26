@@ -26,6 +26,9 @@ function logout() {
         <router-link to="/servers" class="nav-item" active-class="active">
           <span class="dot"></span> 发布 MCP 服务
         </router-link>
+        <router-link to="/stats" class="nav-item" active-class="active">
+          <span class="dot"></span> 调用统计
+        </router-link>
         <router-link to="/ai-chat" class="nav-item" active-class="active">
           <span class="dot"></span> AI 聊天测试
         </router-link>
