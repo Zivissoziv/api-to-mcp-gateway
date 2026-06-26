@@ -1,4 +1,4 @@
-import { fixIds } from './fix-ids'
+import { fetchJson } from './client'
 
 export interface McpServer {
   id: number
@@ -17,20 +17,6 @@ export interface McpServerTool {
   toolId: number
   sortOrder: number
   createdAt: string
-}
-
-const headers = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${sessionStorage.getItem('accessToken')}`,
-})
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { ...headers(), ...init?.headers as any } })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(body ? JSON.parse(body).message || `Request failed (${res.status})` : `Request failed (${res.status})`)
-  }
-  return fixIds(await res.json()) as T
 }
 
 export async function listServers(): Promise<McpServer[]> {
@@ -54,8 +40,7 @@ export async function updateServer(id: number, data: { code: string; name: strin
 }
 
 export async function deleteServer(id: number): Promise<void> {
-  const res = await fetch(`/api/servers/${id}`, { method: 'DELETE', headers: headers() })
-  if (!res.ok) throw new Error('Failed to delete server')
+  await fetchJson(`/api/servers/${id}`, { method: 'DELETE' })
 }
 
 export async function getServerTools(serverId: number): Promise<McpServerTool[]> {
@@ -69,8 +54,7 @@ export async function bindTool(serverId: number, toolId: number): Promise<McpSer
 }
 
 export async function unbindTool(serverId: number, toolId: number): Promise<void> {
-  const res = await fetch(`/api/servers/${serverId}/tools/${toolId}`, { method: 'DELETE', headers: headers() })
-  if (!res.ok) throw new Error('Failed to unbind tool')
+  await fetchJson(`/api/servers/${serverId}/tools/${toolId}`, { method: 'DELETE' })
 }
 
 // -- Publish / MCP Key --

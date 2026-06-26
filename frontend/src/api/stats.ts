@@ -1,4 +1,4 @@
-import { fixIds } from './fix-ids'
+import { fetchJson } from './client'
 
 export interface CallSummary {
   totalCalls: number
@@ -35,20 +35,6 @@ export interface IpCallStats {
 export interface ServerDetail {
   tools: ToolCallStats[]
   ips: IpCallStats[]
-}
-
-const headers = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${sessionStorage.getItem('accessToken')}`,
-})
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { ...headers(), ...init?.headers as any } })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(body ? JSON.parse(body).message || `Request failed (${res.status})` : `Request failed (${res.status})`)
-  }
-  return fixIds(await res.json()) as T
 }
 
 export async function getSummary(): Promise<CallSummary> {

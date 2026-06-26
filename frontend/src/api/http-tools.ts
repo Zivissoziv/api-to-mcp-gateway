@@ -1,4 +1,4 @@
-import { fixIds } from './fix-ids'
+import { fetchJson } from './client'
 
 export interface ParamMapping {
   id?: number
@@ -18,25 +18,13 @@ export interface HttpTool {
   httpMethod: string
   urlTemplate: string
   headers: string | null
+  headerTemplate: string | null
+  bodyTemplate: string | null
   authConfigId: number | null
   status: string
   createdBy: number
   createdAt: string
   updatedAt: string
-}
-
-const headers = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${sessionStorage.getItem('accessToken')}`,
-})
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { ...headers(), ...init?.headers as any } })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(body ? JSON.parse(body).message || `Request failed (${res.status})` : `Request failed (${res.status})`)
-  }
-  return fixIds(await res.json()) as T
 }
 
 export async function listTools(): Promise<HttpTool[]> {
@@ -72,11 +60,7 @@ export async function updateTool(id: number, data: {
 }
 
 export async function deleteTool(id: number): Promise<void> {
-  const res = await fetch(`/api/http-tools/${id}`, {
-    method: 'DELETE',
-    headers: headers(),
-  })
-  if (!res.ok) throw new Error('Failed to delete tool')
+  await fetchJson(`/api/http-tools/${id}`, { method: 'DELETE' })
 }
 
 export async function getToolSchema(toolId: number): Promise<string> {

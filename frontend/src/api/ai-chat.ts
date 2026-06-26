@@ -1,4 +1,4 @@
-import { fixIds } from './fix-ids'
+import { fetchJson } from './client'
 
 export interface SessionInfo {
   sessionId: string
@@ -22,20 +22,6 @@ export interface ChatReply {
   durationMs: number
 }
 
-const headers = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${sessionStorage.getItem('accessToken')}`,
-})
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { ...headers(), ...init?.headers as any } })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(body ? JSON.parse(body).message || `Request failed (${res.status})` : `Request failed (${res.status})`)
-  }
-  return fixIds(await res.json()) as T
-}
-
 export async function createSession(serverId: number, modelConfigId: number, mcpKey?: string): Promise<SessionInfo> {
   return fetchJson('/api/ai-chat/sessions', {
     method: 'POST',
@@ -51,8 +37,5 @@ export async function sendChatMessage(sessionId: string, message: string): Promi
 }
 
 export async function closeSession(sessionId: string): Promise<void> {
-  const res = await fetch(`/api/ai-chat/sessions/${sessionId}`, {
-    method: 'DELETE', headers: headers(),
-  })
-  if (!res.ok) throw new Error('Failed to close session')
+  await fetchJson(`/api/ai-chat/sessions/${sessionId}`, { method: 'DELETE' })
 }
