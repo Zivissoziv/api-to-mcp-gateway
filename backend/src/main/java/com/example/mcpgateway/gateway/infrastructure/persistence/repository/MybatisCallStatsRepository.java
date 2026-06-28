@@ -8,6 +8,7 @@ import com.example.mcpgateway.gateway.domain.repository.CallStatsRepository;
 import com.example.mcpgateway.gateway.infrastructure.persistence.mapper.GatewayCallMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -115,18 +116,39 @@ public class MybatisCallStatsRepository implements CallStatsRepository {
 
     private static Instant instantValue(Map<String, Object> row, String key) {
         Object v = row.get(key);
+        if (v instanceof Instant instant) {
+            return instant;
+        }
+        if (v instanceof LocalDateTime localDateTime) {
+            return localDateTime.toInstant(ZoneOffset.ofHours(8));
+        }
+        if (v instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
         if (v instanceof java.sql.Timestamp ts) {
             return ts.toInstant();
         }
-        // SQLite returns String in "yyyy-MM-dd HH:mm:ss" format (local time)
-        // Parse as local date-time and treat as +08:00 before converting to UTC Instant
         if (v instanceof String s && !s.isBlank()) {
-            try {
-                return LocalDateTime.parse(s, ISO_FORMATTER).toInstant(ZoneOffset.ofHours(8));
-            } catch (Exception e) {
-                return null;
-            }
+            return parseStringInstant(s);
         }
         return null;
+    }
+
+    private static Instant parseStringInstant(String value) {
+        try {
+            return LocalDateTime.parse(value, ISO_FORMATTER).toInstant(ZoneOffset.ofHours(8));
+        } catch (Exception ignored) {
+            // Try the next supported database/JDBC timestamp shape.
+        }
+        try {
+            return LocalDateTime.parse(value).toInstant(ZoneOffset.ofHours(8));
+        } catch (Exception ignored) {
+            // Try the next supported database/JDBC timestamp shape.
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

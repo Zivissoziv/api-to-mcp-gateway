@@ -7,9 +7,9 @@ import com.example.mcpgateway.apitool.domain.repository.ParameterMappingReposito
 import com.example.mcpgateway.executor.ExecutionResult;
 import com.example.mcpgateway.executor.HttpToolDefinition;
 import com.example.mcpgateway.executor.HttpToolExecutor;
+import com.example.mcpgateway.gateway.application.service.GatewayCallRecorder;
 import com.example.mcpgateway.gateway.application.service.McpServerAuthVerifier;
 import com.example.mcpgateway.gateway.application.service.McpServerProvider;
-import com.example.mcpgateway.gateway.application.service.GatewayCallRecorder;
 import com.example.mcpgateway.gateway.domain.model.PublishedServer;
 import com.example.mcpgateway.gateway.domain.model.PublishedTool;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,9 +20,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/mcp/{serverCode}")
@@ -41,9 +49,10 @@ public class McpGatewayController {
     private final GatewayCallRecorder callRecorder;
 
     public McpGatewayController(McpServerProvider serverProvider, McpServerAuthVerifier authVerifier,
-                                 HttpToolRepository httpTools,
-                                 ParameterMappingRepository mappings,
-                                 HttpToolExecutor executor, GatewayCallRecorder callRecorder) {
+                                HttpToolRepository httpTools,
+                                ParameterMappingRepository mappings,
+                                HttpToolExecutor executor,
+                                GatewayCallRecorder callRecorder) {
         this.serverProvider = serverProvider;
         this.authVerifier = authVerifier;
         this.httpTools = httpTools;
@@ -59,57 +68,94 @@ public class McpGatewayController {
                                   HttpServletRequest request) {
         String traceId = UUID.randomUUID().toString();
         String clientIp = request.getRemoteAddr();
+        CallRecordContext recordContext = new CallRecordContext(serverCode, clientIp, traceId);
+        JsonNode id = null;
 
-        // 1. Parse JSON-RPC body
-        JsonNode jsonRpc;
         try {
-            jsonRpc = mapper.readTree(rawBody);
-        } catch (Exception e) {
-            return jsonRpcError(null, -32700, "Parse error");
-        }
-
-        String jsonrpc = jsonRpc.has("jsonrpc") ? jsonRpc.get("jsonrpc").asText() : JSON_RPC_VERSION;
-        JsonNode id = jsonRpc.get("id");
-        String method = jsonRpc.has("method") ? jsonRpc.get("method").asText() : "";
-        JsonNode params = jsonRpc.has("params") ? jsonRpc.get("params") : mapper.createObjectNode();
-
-        if (!JSON_RPC_VERSION.equals(jsonrpc)) {
-            return jsonRpcError(id, -32600, "Invalid Request: jsonrpc version must be 2.0");
-        }
-        if (method.isBlank()) {
-            return jsonRpcError(id, -32600, "Invalid Request: method is required");
-        }
-
-        // 2. Load published server
-        PublishedServer server = serverProvider.load(serverCode).orElse(null);
-        if (server == null) {
-            return jsonRpcError(id, -32002, "Server not found or not published");
-        }
-
-        // 3. Verify MCP Key (skip for initialize — client may not have key yet)
-        if (!"initialize".equals(method)) {
-            String presentedKey = null;
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                presentedKey = authHeader.substring(7);
+            JsonNode jsonRpc;
+            try {
+                jsonRpc = mapper.readTree(rawBody);
+            } catch (Exception e) {
+                recordContext.method("parse");
+                recordContext.fail("PARSE_ERROR");
+                return jsonRpcError(null, -32700, "Parse error");
             }
-            if (!authVerifier.verify(server.id(), presentedKey)) {
-                return jsonRpcError(id, -32001, "Invalid or missing MCP Key");
-            }
-        }
 
-        // 4. Route
-        long startNanos = System.nanoTime();
-        try {
+            String jsonrpc = jsonRpc.has("jsonrpc") ? jsonRpc.get("jsonrpc").asText() : JSON_RPC_VERSION;
+            id = jsonRpc.get("id");
+            String method = jsonRpc.has("method") ? jsonRpc.get("method").asText() : "";
+            JsonNode params = jsonRpc.has("params") ? jsonRpc.get("params") : mapper.createObjectNode();
+            recordContext.method(method);
+
+            if (!JSON_RPC_VERSION.equals(jsonrpc)) {
+                recordContext.fail("INVALID_JSONRPC_VERSION");
+                return jsonRpcError(id, -32600, "Invalid Request: jsonrpc version must be 2.0");
+            }
+            if (method.isBlank()) {
+                recordContext.fail("MISSING_METHOD");
+                return jsonRpcError(id, -32600, "Invalid Request: method is required");
+            }
+
+            PublishedServer server = serverProvider.load(serverCode).orElse(null);
+            if (server == null) {
+                recordContext.fail("SERVER_NOT_FOUND");
+                return jsonRpcError(id, -32002, "Server not found or not published");
+            }
+
+            if (!"initialize".equals(method)) {
+                String presentedKey = null;
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    presentedKey = authHeader.substring(7);
+                }
+                if (!authVerifier.verify(server.id(), presentedKey)) {
+                    recordContext.fail("AUTH_FAILED");
+                    return jsonRpcError(id, -32001, "Invalid or missing MCP Key");
+                }
+            }
+
             return switch (method) {
-                case "initialize" -> handleInitialize(id, server);
-                case "tools/list" -> handleToolsList(id, server, traceId, clientIp);
-                case "tools/call" -> handleToolsCall(id, server, params, traceId, clientIp, startNanos);
-                case "ping" -> handlePing(id);
-                default -> jsonRpcError(id, -32601, "Method not found: " + method);
+                case "initialize" -> {
+                    recordContext.succeed();
+                    yield handleInitialize(id, server);
+                }
+                case "tools/list" -> {
+                    recordContext.succeed();
+                    yield handleToolsList(id, server);
+                }
+                case "tools/call" -> handleToolsCall(id, server, params, recordContext);
+                case "ping" -> {
+                    recordContext.succeed();
+                    yield handlePing(id);
+                }
+                default -> {
+                    recordContext.fail("METHOD_NOT_FOUND");
+                    yield jsonRpcError(id, -32601, "Method not found: " + method);
+                }
             };
         } catch (Exception e) {
-            log.error("MCP request error: server={} method={}", serverCode, method, e);
+            log.error("MCP request error: server={} method={}", serverCode, recordContext.mcpMethod, e);
+            recordContext.fail("INTERNAL_ERROR");
             return jsonRpcError(id, -32603, "Internal error");
+        } finally {
+            publishCallRecord(recordContext);
+        }
+    }
+
+    private void publishCallRecord(CallRecordContext recordContext) {
+        try {
+            callRecorder.record(
+                    recordContext.serverCode,
+                    recordContext.toolName,
+                    recordContext.clientIp,
+                    recordContext.traceId,
+                    recordContext.mcpMethod,
+                    recordContext.success,
+                    recordContext.statusCode,
+                    recordContext.durationMs(),
+                    recordContext.errorSummary);
+        } catch (Exception e) {
+            log.warn("Failed to publish gateway call record: server={} method={} traceId={}",
+                    recordContext.serverCode, recordContext.mcpMethod, recordContext.traceId, e);
         }
     }
 
@@ -124,9 +170,7 @@ public class McpGatewayController {
         return jsonRpcSuccess(id, result);
     }
 
-    private ResponseEntity<String> handleToolsList(JsonNode id, PublishedServer server,
-                                                     String traceId, String clientIp) {
-        callRecorder.record(server.code(), null, clientIp, traceId, "tools/list", true, 0, 0, null);
+    private ResponseEntity<String> handleToolsList(JsonNode id, PublishedServer server) {
         ObjectNode result = mapper.createObjectNode();
         var toolsArray = result.putArray("tools");
         for (PublishedTool tool : server.tools()) {
@@ -144,30 +188,27 @@ public class McpGatewayController {
     }
 
     private ResponseEntity<String> handleToolsCall(JsonNode id, PublishedServer server,
-                                                     JsonNode params, String traceId,
-                                                     String clientIp, long startNanos) {
+                                                   JsonNode params, CallRecordContext recordContext) {
         String toolName = params.has("name") ? params.get("name").asText() : "";
+        recordContext.tool(toolName);
         JsonNode arguments = params.has("arguments") ? params.get("arguments") : mapper.createObjectNode();
 
-        // Find tool in published server and get its DB ID
         PublishedTool publishedTool = server.tools().stream()
                 .filter(t -> t.name().equals(toolName))
                 .findFirst()
                 .orElse(null);
         if (publishedTool == null) {
-            callRecorder.record(server.code(), toolName, clientIp, traceId, "tools/call",
-                    false, 0, 0, "Tool not found: " + toolName);
+            recordContext.fail("TOOL_NOT_FOUND: " + toolName);
             return jsonRpcError(id, -32003, "Tool not found: " + toolName);
         }
 
-        // Load full HTTP tool definition from DB
         HttpTool httpTool = httpTools.findById(publishedTool.id()).orElse(null);
         if (httpTool == null) {
+            recordContext.fail("TOOL_DEFINITION_NOT_FOUND: " + toolName);
             return jsonRpcError(id, -32004, "Tool definition not found in database");
         }
 
         try {
-            // Build parameter map from MCP arguments
             Map<String, Object> paramValues = new HashMap<>();
             if (arguments.isObject()) {
                 arguments.fieldNames().forEachRemaining(key -> {
@@ -179,7 +220,6 @@ public class McpGatewayController {
                 });
             }
 
-            // Build HttpToolDefinition
             List<ParameterMapping> paramMappings = mappings.findByToolId(httpTool.id());
             List<HttpToolDefinition.ParameterMapping> defMappings = paramMappings.stream()
                     .map(pm -> new HttpToolDefinition.ParameterMapping(
@@ -194,14 +234,9 @@ public class McpGatewayController {
                     httpTool.bodyTemplate(),
                     defMappings);
 
-            // Execute
             ExecutionResult result = executor.execute(definition, paramValues);
-            long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+            recordContext.result(result.success(), result.statusCode(), result.errorMessage());
 
-            callRecorder.record(server.code(), toolName, clientIp, traceId, "tools/call",
-                    result.success(), result.statusCode(), (int) durationMs, result.errorMessage());
-
-            // Convert to MCP response
             ObjectNode resultObj = mapper.createObjectNode();
             var content = resultObj.putArray("content");
             ObjectNode textContent = content.addObject();
@@ -218,9 +253,7 @@ public class McpGatewayController {
             return jsonRpcSuccess(id, resultObj);
 
         } catch (Exception e) {
-            long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
-            callRecorder.record(server.code(), toolName, clientIp, traceId, "tools/call",
-                    false, 0, (int) durationMs, e.getMessage());
+            recordContext.fail(e.getMessage() != null ? e.getMessage() : "TOOL_EXECUTION_ERROR");
             return jsonRpcError(id, -32004, "Tool execution error");
         }
     }
@@ -239,8 +272,6 @@ public class McpGatewayController {
         }
     }
 
-    // -- JSON-RPC response helpers --
-
     private ResponseEntity<String> jsonRpcSuccess(JsonNode id, ObjectNode result) {
         ObjectNode resp = mapper.createObjectNode();
         resp.put("jsonrpc", JSON_RPC_VERSION);
@@ -257,5 +288,55 @@ public class McpGatewayController {
         error.put("code", code);
         error.put("message", message);
         return ResponseEntity.ok(resp.toString());
+    }
+
+    private static class CallRecordContext {
+        private final String serverCode;
+        private final String clientIp;
+        private final String traceId;
+        private final long startNanos = System.nanoTime();
+        private String mcpMethod = "unknown";
+        private String toolName;
+        private boolean success;
+        private int statusCode;
+        private String errorSummary = "INTERNAL_ERROR";
+
+        private CallRecordContext(String serverCode, String clientIp, String traceId) {
+            this.serverCode = serverCode;
+            this.clientIp = clientIp;
+            this.traceId = traceId;
+        }
+
+        private void method(String mcpMethod) {
+            if (mcpMethod != null && !mcpMethod.isBlank()) {
+                this.mcpMethod = mcpMethod;
+            }
+        }
+
+        private void tool(String toolName) {
+            this.toolName = toolName;
+        }
+
+        private void succeed() {
+            this.success = true;
+            this.statusCode = 0;
+            this.errorSummary = null;
+        }
+
+        private void fail(String errorSummary) {
+            this.success = false;
+            this.errorSummary = errorSummary;
+        }
+
+        private void result(boolean success, int statusCode, String errorSummary) {
+            this.success = success;
+            this.statusCode = statusCode;
+            this.errorSummary = success ? null : (errorSummary != null ? errorSummary : "TOOL_EXECUTION_FAILED");
+        }
+
+        private int durationMs() {
+            long duration = (System.nanoTime() - startNanos) / 1_000_000;
+            return duration > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) duration;
+        }
     }
 }

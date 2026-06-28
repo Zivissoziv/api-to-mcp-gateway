@@ -150,7 +150,7 @@ onMounted(load)
     <header class="page-header">
       <div>
         <h2>AI 聊天测试</h2>
-        <p class="page-intro">选择已发布的 MCP Server 和 AI 模型，通过自然语言对话验证 Tool 是否能被正确理解和调用。</p>
+        <p class="page-intro">选择已发布的 MCP 服务 和 AI 模型，通过自然语言对话验证 Tool 是否能被正确理解和调用。</p>
       </div>
     </header>
 

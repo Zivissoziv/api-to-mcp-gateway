@@ -28,7 +28,7 @@ async function submit() {
   <main class="login-shell">
     <section class="login-intro">
       <p class="eyebrow">MCP GATEWAY</p>
-      <h1>企业 API，<br />抵达 AI 的入口。</h1>
+      <h1>把企业 API，发布成可靠的 MCP 工具</h1>
       <p>登录后即可管理 API Tool、组合 MCP Server，并完成协议与 AI 验证。</p>
     </section>
     <section class="login-panel">

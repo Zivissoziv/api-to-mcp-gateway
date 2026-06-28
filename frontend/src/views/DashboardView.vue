@@ -19,9 +19,9 @@ onMounted(load)
 <template>
   <section class="hero" style="max-width: 800px;">
     <p class="eyebrow">MCP GATEWAY</p>
-    <h1>把企业 API，发布成可靠的 MCP 工具。</h1>
+    <h1>API to MCP</h1>
     <p class="summary">
-      当前已完成 Tool 配置、Server 编组、AI 聊天测试和调用统计。下一步将支持更多协议适配和运维监控。
+      MCP（Model Context Protocol，模型上下文协议）是让AI模型能以统一标准连接外部工具、数据源和系统能力的通用接口层，相当于AI的“USB接口”或“智能插线板”，让不同AI和工具之间“即插即用”
     </p>
     <div class="stats-row">
       <div class="stat-card">

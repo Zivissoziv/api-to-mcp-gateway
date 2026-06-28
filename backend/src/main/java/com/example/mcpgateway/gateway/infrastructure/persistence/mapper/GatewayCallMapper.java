@@ -12,7 +12,8 @@ public interface GatewayCallMapper extends BaseMapper<GatewayCallRow> {
 
     @Select("SELECT COUNT(*) AS totalCalls, "
             + "COUNT(DISTINCT server_code) AS uniqueServers, "
-            + "COUNT(DISTINCT tool_name) AS uniqueTools, "
+            + "COUNT(DISTINCT CASE WHEN mcp_method = 'tools/call' "
+            + "AND tool_name IS NOT NULL AND tool_name <> '' THEN tool_name END) AS uniqueTools, "
             + "COUNT(DISTINCT client_ip) AS uniqueIps "
             + "FROM gateway_calls")
     Map<String, Object> selectSummary();
@@ -36,6 +37,8 @@ public interface GatewayCallMapper extends BaseMapper<GatewayCallRow> {
             + "AVG(duration_ms) AS avgDurationMs, "
             + "MAX(created_at) AS lastCallAt "
             + "FROM gateway_calls "
+            + "WHERE mcp_method = 'tools/call' "
+            + "AND tool_name IS NOT NULL AND tool_name <> '' "
             + "GROUP BY server_code, tool_name "
             + "ORDER BY callCount DESC")
     List<Map<String, Object>> selectStatsByTool();
@@ -55,7 +58,9 @@ public interface GatewayCallMapper extends BaseMapper<GatewayCallRow> {
             + "AVG(duration_ms) AS avgDurationMs, "
             + "MAX(created_at) AS lastCallAt "
             + "FROM gateway_calls "
-            + "WHERE server_code = #{serverCode} AND tool_name IS NOT NULL "
+            + "WHERE server_code = #{serverCode} "
+            + "AND mcp_method = 'tools/call' "
+            + "AND tool_name IS NOT NULL AND tool_name <> '' "
             + "GROUP BY tool_name "
             + "ORDER BY callCount DESC")
     List<Map<String, Object>> selectStatsByServerCode(String serverCode);

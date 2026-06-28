@@ -80,8 +80,10 @@ function formatMs(ms: number): string {
 
 function formatTime(t: string | null): string {
   if (!t) return '—'
-  // keep the raw string — it's already a friendly ISO / SQL format
-  return t
+  const date = new Date(t)
+  if (Number.isNaN(date.getTime())) return t
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 onMounted(loadAll)

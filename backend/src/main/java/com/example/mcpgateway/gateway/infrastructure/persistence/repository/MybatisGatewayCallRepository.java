@@ -6,10 +6,14 @@ import com.example.mcpgateway.gateway.infrastructure.persistence.mapper.GatewayC
 import com.example.mcpgateway.gateway.infrastructure.persistence.row.GatewayCallRow;
 import org.springframework.stereotype.Repository;
 
-import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 @Repository
 public class MybatisGatewayCallRepository implements GatewayCallRepository {
+    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter DB_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private final GatewayCallMapper mapper;
     public MybatisGatewayCallRepository(GatewayCallMapper mapper) { this.mapper = mapper; }
 
@@ -28,7 +32,7 @@ public class MybatisGatewayCallRepository implements GatewayCallRepository {
         r.statusCode = c.statusCode();
         r.durationMs = (int) c.durationMs();
         r.errorSummary = c.errorSummary();
-        r.createdAt = c.createdAt().atZone(ZoneOffset.ofHours(8)).toLocalDateTime();
+        r.createdAt = DB_TIME_FORMATTER.format(c.createdAt().atZone(APP_ZONE));
         return r;
     }
 }

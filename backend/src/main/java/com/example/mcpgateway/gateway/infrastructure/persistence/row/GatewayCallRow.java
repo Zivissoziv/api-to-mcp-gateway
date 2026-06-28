@@ -3,7 +3,6 @@ package com.example.mcpgateway.gateway.infrastructure.persistence.row;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.time.LocalDateTime;
 
 @TableName("gateway_calls")
 public class GatewayCallRow {
@@ -17,5 +16,5 @@ public class GatewayCallRow {
     public Integer statusCode;
     public Integer durationMs;
     public String errorSummary;
-    public LocalDateTime createdAt;
+    public String createdAt;
 }
