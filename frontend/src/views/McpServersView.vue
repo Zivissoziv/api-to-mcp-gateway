@@ -5,7 +5,7 @@ import type { McpServer, McpServerTool, ConnectionInfo } from '../api/servers'
 import { listTools, getMappings } from '../api/http-tools'
 import type { HttpTool, ParamMapping } from '../api/http-tools'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Search } from '@element-plus/icons-vue'
+import { ArrowDown, QuestionFilled, Search } from '@element-plus/icons-vue'
 
 function handleCmd(cmd: string, s: McpServer) {
   switch (cmd) {
@@ -250,7 +250,22 @@ onMounted(load)
       <el-table-column label="绑定工具" width="80">
         <template #default="{ row }">{{ serverToolCounts[row.id] ?? '—' }}</template>
       </el-table-column>
-      <el-table-column label="MCP 端点" min-width="200">
+      <el-table-column min-width="200">
+        <template #header>
+          <span class="endpoint-header">
+            MCP 端点
+            <el-tooltip placement="top" effect="dark" popper-class="mcp-protocol-tooltip">
+              <template #content>
+                <div class="tooltip-title">Streamable HTTP</div>
+                <div>每个服务都是独立 endpoint：<code>/mcp/{serverCode}</code></div>
+                <div><code>Mcp-Session-Id</code> 是可选会话机制；本平台初始化时会返回。</div>
+                <div>因此后续 <code>tools/list</code>、<code>tools/call</code> 需要携带该 session 和 MCP Key。</div>
+                <div><code>GET</code> 打开 SSE 事件流，<code>DELETE</code> 关闭会话。</div>
+              </template>
+              <el-icon class="help-icon"><QuestionFilled /></el-icon>
+            </el-tooltip>
+          </span>
+        </template>
         <template #default="{ row }"><code class="url-cell">/mcp/{{ row.code }}</code></template>
       </el-table-column>
       <el-table-column label="状态" width="80">
@@ -385,6 +400,16 @@ onMounted(load)
           <label>MCP 端点路径</label>
           <code>{{ connInfo.mcpPath }}</code>
         </div>
+        <div class="info-row">
+          <label>协议类型</label>
+          <code>Streamable HTTP</code>
+          <p class="protocol-help">
+            使用同一个端点处理 <code>POST</code>、<code>GET</code> 和 <code>DELETE</code>。
+            <code>Mcp-Session-Id</code> 在协议中是可选机制；本平台会在初始化响应中返回该头。
+            <code>POST</code> 请求需发送 JSON-RPC 2.0，建议同时声明
+            <code>Accept: application/json, text/event-stream</code>。
+          </p>
+        </div>
         <div class="info-row" v-if="connInfo.mcpKey">
           <label>MCP Key</label>
           <div class="key-row">
@@ -393,9 +418,21 @@ onMounted(load)
           </div>
         </div>
         <div class="info-row">
-          <label>示例 curl</label>
+          <label>初始化会话</label>
+          <pre class="curl-example">curl -i -X POST http://localhost:8080{{ connInfo.mcpPath }} \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"demo-client","version":"1.0.0"}}}'</pre>
+          <p class="protocol-help">本平台响应头会返回 <code>Mcp-Session-Id</code>；后续请求需携带它。</p>
+        </div>
+        <div class="info-row">
+          <label>列出工具</label>
           <pre class="curl-example">curl -X POST http://localhost:8080{{ connInfo.mcpPath }} \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "Mcp-Session-Id: &lt;session-id&gt;" \
   -H "Authorization: Bearer &lt;mcp-key&gt;" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
         </div>
@@ -462,5 +499,36 @@ onMounted(load)
   background: #1e1e1e; color: #d4d4d4; padding: 12px 16px; border-radius: 6px;
   font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px;
   overflow-x: auto; white-space: pre; margin: 0;
+}
+.endpoint-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.help-icon {
+  color: #909399;
+  cursor: help;
+  font-size: 15px;
+  vertical-align: middle;
+}
+.help-icon:hover {
+  color: #409eff;
+}
+.protocol-help {
+  margin: 6px 0 0;
+  color: #606266;
+  line-height: 1.6;
+}
+:global(.mcp-protocol-tooltip) {
+  max-width: 420px;
+  line-height: 1.6;
+}
+:global(.mcp-protocol-tooltip code) {
+  color: #f5d76e;
+}
+:global(.mcp-protocol-tooltip .tooltip-title) {
+  margin-bottom: 4px;
+  font-weight: 700;
+  color: #fff;
 }
 </style>

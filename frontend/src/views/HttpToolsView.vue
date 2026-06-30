@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { listTools, createTool, updateTool, deleteTool, getMappings, testTool } from '../api/http-tools'
 import type { HttpTool, ParamMapping, TestResult } from '../api/http-tools'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { MagicStick, Search } from '@element-plus/icons-vue'
 
 const tools = ref<HttpTool[]>([])
 const loading = ref(false)
@@ -238,6 +238,33 @@ const bodyError = computed(() => {
 
 const templateError = computed(() => headerError.value || bodyError.value)
 
+function beautifyBodyTemplate() {
+  if (!bodyTemplate.value.trim()) {
+    ElMessage.warning('请求体模板为空')
+    return
+  }
+
+  const placeholders: Array<{ value: string; quoted: boolean }> = []
+  const protectedJson = bodyTemplate.value.replace(/\$\{(\w+)\}/g, (match, _key, offset, source) => {
+    const token = `__MCP_TEMPLATE_VAR_${placeholders.length}__`
+    const quoted = source[offset - 1] === '"' && source[offset + match.length] === '"'
+    placeholders.push({ value: match, quoted })
+    return quoted ? token : `"${token}"`
+  })
+
+  try {
+    const parsed = JSON.parse(protectedJson)
+    bodyTemplate.value = JSON.stringify(parsed, null, 2).replace(/"__MCP_TEMPLATE_VAR_(\d+)__"/g, (_, index) => {
+      const placeholder = placeholders[Number(index)]
+      if (!placeholder) return ''
+      return placeholder.quoted ? `"${placeholder.value}"` : placeholder.value
+    })
+    ElMessage.success('请求体模板已美化')
+  } catch (e: any) {
+    ElMessage.warning('请求体模板不是合法的 JSON：' + (e.message || ''))
+  }
+}
+
 async function openEditClick(t: HttpTool) {
   editingId.value = t.id
   await openEdit(t)
@@ -412,13 +439,13 @@ onMounted(load)
       <!-- ── Step 1: Basic Configuration ── -->
       <div v-show="currentStep === 1">
         <el-form label-position="top" @submit.prevent="goToStep2">
-          <el-row :gutter="16">
-            <el-col :span="12">
+          <el-row :gutter="12" class="compact-basic-row">
+            <el-col :span="7">
               <el-form-item label="名称" required>
                 <el-input v-model="form.name" placeholder="get_user_info" @input="form.name = form.name.replace(/[^a-zA-Z0-9_-]/g, '')" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="4">
               <el-form-item label="方法" required>
                 <el-select v-model="form.httpMethod" style="width:100%">
                   <el-option label="GET" value="GET" />
@@ -429,17 +456,21 @@ onMounted(load)
                 </el-select>
               </el-form-item>
             </el-col>
-          </el-row>
-          <el-form-item label="描述">
-            <el-input v-model="form.description" type="textarea" :rows="2" />
-          </el-form-item>
-
-          <el-row :gutter="24">
-            <el-col :span="12">
-              <el-form-item label="URL 模板">
+            <el-col :span="13">
+              <el-form-item label="URL 模板" required>
                 <template #label><span>URL 模板 <span class="editor-hint">用 {id} 或 ${name} 标记变量</span></span></template>
                 <el-input v-model="form.urlTemplate" placeholder="https://api.example.com/users/{id}" />
               </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="描述">
+                <el-input v-model="form.description" placeholder="简要说明这个接口的用途" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="16" class="template-grid">
+            <el-col :span="11">
               <el-form-item
                 label="请求头模板"
                 :error="headerError"
@@ -453,18 +484,25 @@ onMounted(load)
                 :error="bodyError"
                 :validate-status="bodyError ? 'error' : undefined"
               >
-                <template #label><span>请求体模板 <span class="editor-hint">JSON 对象，用 ${xxx} 标记变量</span></span></template>
-                <el-input v-model="bodyTemplate" type="textarea" :rows="8" class="mono-input" placeholder='{"name": "${name}"}' />
+                <template #label>
+                  <span class="template-label">
+                    <span>请求体模板 <span class="editor-hint">JSON 对象，用 ${xxx} 标记变量</span></span>
+                    <el-button size="small" text type="primary" :icon="MagicStick" @click.stop="beautifyBodyTemplate">
+                      美化 JSON
+                    </el-button>
+                  </span>
+                </template>
+                <el-input v-model="bodyTemplate" type="textarea" :rows="9" class="mono-input" placeholder='{"name": "${name}"}' />
               </el-form-item>
             </el-col>
 
-            <el-col :span="12">
+            <el-col :span="13">
               <div class="var-header">
                 <span class="var-header-label">变量定义</span>
                 <span class="editor-hint" v-if="vars.length === 0">编辑左侧模板后将自动识别</span>
                 <span class="editor-hint" v-else>共 {{ vars.length }} 个变量</span>
               </div>
-              <el-table v-if="vars.length" :data="vars" stripe size="small" max-height="240" class="var-table-ep">
+              <el-table v-if="vars.length" :data="vars" stripe size="small" max-height="390" class="var-table-ep">
                 <el-table-column label="变量" width="90">
                   <template #default="{ row }"><code class="var-key">$\{{ row.key }}</code></template>
                 </el-table-column>
@@ -839,6 +877,22 @@ onMounted(load)
 .confirm-test-result p {
   margin: 0;
   color: #555;
+}
+.template-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.compact-basic-row :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+.template-grid :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+.var-table-ep {
+  width: 100%;
 }
 
 /* M4 dialog: scrollable body when content overflows */

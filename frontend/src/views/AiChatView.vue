@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick } from 'vue'
-import { createSession, sendChatMessage, closeSession } from '../api/ai-chat'
+import { createMultiServerSession, sendChatMessage, closeSession } from '../api/ai-chat'
 import { listServers, getConnectionInfo } from '../api/servers'
 import { listConfigs, createConfig, updateConfig, deleteConfig } from '../api/ai-config'
 import type { McpServer } from '../api/servers'
@@ -12,9 +12,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const servers = ref<McpServer[]>([])
 const configs = ref<AiModelConfig[]>([])
 const session = ref<SessionInfo | null>(null)
-const selectedServerId = ref<number | null>(null)
+const selectedServerIds = ref<number[]>([])
 const selectedConfigId = ref<number | null>(null)
 const mcpKeyLoading = ref(false)
+const mcpKeyCache = ref<Record<number, string | null>>({})
 const messages = ref<{ role: string; content: string; toolCalls?: ToolCallInfo[] }[]>([])
 const inputText = ref('')
 const sending = ref(false)
@@ -40,13 +41,17 @@ async function load() {
 }
 
 async function onServerChange() {
-  if (!selectedServerId.value) return
+  if (selectedServerIds.value.length === 0) return
   mcpKeyLoading.value = true
   try {
-    const info = await getConnectionInfo(selectedServerId.value)
-    if (info.mcpKey) {
-      // stored for use in startSession
-      ;(window as any).__mcpKeyCache = info.mcpKey
+    const selected = new Set(selectedServerIds.value)
+    for (const key of Object.keys(mcpKeyCache.value)) {
+      if (!selected.has(Number(key))) delete mcpKeyCache.value[Number(key)]
+    }
+    for (const serverId of selectedServerIds.value) {
+      if (serverId in mcpKeyCache.value) continue
+      const info = await getConnectionInfo(serverId)
+      mcpKeyCache.value[serverId] = info.mcpKey
     }
   } catch { /* ignore */ } finally {
     mcpKeyLoading.value = false
@@ -54,20 +59,20 @@ async function onServerChange() {
 }
 
 async function startSession() {
-  if (!selectedServerId.value || !selectedConfigId.value) {
-    ElMessage.warning('请选择 Server 和模型配置')
+  if (selectedServerIds.value.length === 0 || !selectedConfigId.value) {
+    ElMessage.warning('请选择至少一个 Server 和模型配置')
     return
   }
   try {
     if (session.value) {
       await closeSession(session.value.sessionId).catch(() => {})
     }
-    const mcpKey = (window as any).__mcpKeyCache || undefined
-    session.value = await createSession(selectedServerId.value, selectedConfigId.value, mcpKey)
+    await onServerChange()
+    session.value = await createMultiServerSession(selectedServerIds.value, selectedConfigId.value, mcpKeyCache.value)
     messages.value = []
     messages.value.push({
       role: 'system',
-      content: `已加载 Server "${session.value.serverName}"（${session.value.tools.length} 个 Tool）：${session.value.tools.join(', ')}`,
+      content: `已加载 ${session.value.servers?.length ?? selectedServerIds.value.length} 个 Server（${session.value.tools.length} 个 Tool）：${session.value.tools.join(', ')}`,
     })
     ElMessage.success('会话已创建')
   } catch (e: any) {
@@ -140,7 +145,7 @@ async function removeConfig(c: AiModelConfig) {
   } catch { /* cancelled */ }
 }
 
-watch(selectedServerId, () => { onServerChange() })
+watch(selectedServerIds, () => { onServerChange() })
 
 onMounted(load)
 </script>
@@ -159,7 +164,14 @@ onMounted(load)
       <aside class="chat-sidebar">
         <div class="sidebar-section">
           <label class="field-label">MCP Server</label>
-          <el-select v-model="selectedServerId" style="width:100%" placeholder="选择已发布的 Server…">
+          <el-select
+            v-model="selectedServerIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            style="width:100%"
+            placeholder="选择一个或多个已发布 Server…"
+          >
             <el-option v-for="s in servers" :key="s.id" :value="s.id" :label="s.name" />
           </el-select>
         </div>
@@ -175,11 +187,17 @@ onMounted(load)
             </el-option>
           </el-select>
         </div>
-        <el-button type="primary" style="width:100%;margin-bottom:16px" :disabled="!selectedServerId || !selectedConfigId || mcpKeyLoading" @click="startSession">{{ mcpKeyLoading ? '加载中…' : '开始会话' }}</el-button>
+        <el-button type="primary" style="width:100%;margin-bottom:16px" :disabled="selectedServerIds.length === 0 || !selectedConfigId || mcpKeyLoading" @click="startSession">{{ mcpKeyLoading ? '加载中…' : '开始会话' }}</el-button>
 
         <div v-if="session" class="sidebar-section">
           <label class="field-label">已加载 Tool（{{ session.tools.length }}）</label>
-          <div class="tool-list">
+          <div v-if="session.servers?.length" class="tool-list">
+            <div v-for="server in session.servers" :key="server.serverCode" class="server-tool-group">
+              <div class="server-tool-title">{{ server.serverName }} <code>{{ server.serverCode }}</code></div>
+              <div v-for="t in server.tools" :key="t" class="tool-item">☑ {{ t }}</div>
+            </div>
+          </div>
+          <div v-else class="tool-list">
             <div v-for="t in session.tools" :key="t" class="tool-item">☑ {{ t }}</div>
           </div>
         </div>
@@ -308,6 +326,9 @@ onMounted(load)
 .field-label { display: block; font-size: 13px; font-weight: 600; color: #666; margin-bottom: 6px; }
 .field-row { display: flex; justify-content: space-between; align-items: center; }
 .tool-list { max-height: 200px; overflow-y: auto; }
+.server-tool-group { margin-bottom: 10px; }
+.server-tool-title { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px; }
+.server-tool-title code { font-weight: 400; color: #999; margin-left: 4px; }
 .tool-item { padding: 4px 0; font-size: 13px; color: #409eff; }
 .config-item { padding: 8px 0; border-bottom: 1px solid #f0f0eb; }
 .config-item:last-child { border-bottom: none; }

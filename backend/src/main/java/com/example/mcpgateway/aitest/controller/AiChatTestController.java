@@ -6,6 +6,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/ai-chat")
 public class AiChatTestController {
@@ -14,6 +17,9 @@ public class AiChatTestController {
 
     @PostMapping("/sessions")
     AiChatSessionManager.SessionInfo createSession(@Valid @RequestBody CreateSessionRequest req) {
+        if (req.serverIds() != null && !req.serverIds().isEmpty()) {
+            return sessionManager.startSession(req.serverIds(), req.modelConfigId(), req.mcpKeys());
+        }
         return sessionManager.startSession(req.serverId(), req.modelConfigId(), req.mcpKey());
     }
 
@@ -27,6 +33,7 @@ public class AiChatTestController {
         sessionManager.closeSession(sessionId);
     }
 
-    public record CreateSessionRequest(@NotNull Long serverId, @NotNull Long modelConfigId, String mcpKey) {}
+    public record CreateSessionRequest(Long serverId, List<Long> serverIds, @NotNull Long modelConfigId,
+                                       String mcpKey, Map<Long, String> mcpKeys) {}
     public record ChatRequest(@NotBlank String message) {}
 }

@@ -1,342 +1,185 @@
 package com.example.mcpgateway.gateway.controller;
 
-import com.example.mcpgateway.apitool.domain.model.HttpTool;
-import com.example.mcpgateway.apitool.domain.model.ParameterMapping;
-import com.example.mcpgateway.apitool.domain.repository.HttpToolRepository;
-import com.example.mcpgateway.apitool.domain.repository.ParameterMappingRepository;
-import com.example.mcpgateway.executor.ExecutionResult;
-import com.example.mcpgateway.executor.HttpToolDefinition;
-import com.example.mcpgateway.executor.HttpToolExecutor;
-import com.example.mcpgateway.gateway.application.service.GatewayCallRecorder;
-import com.example.mcpgateway.gateway.application.service.McpServerAuthVerifier;
-import com.example.mcpgateway.gateway.application.service.McpServerProvider;
-import com.example.mcpgateway.gateway.domain.model.PublishedServer;
-import com.example.mcpgateway.gateway.domain.model.PublishedTool;
+import com.example.mcpgateway.gateway.application.service.McpProtocolService;
+import com.example.mcpgateway.gateway.application.service.McpStreamableHttpSessionRegistry;
+import com.example.mcpgateway.gateway.application.service.McpStreamableHttpSessionRegistry.SessionState;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.io.IOException;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/mcp/{serverCode}")
 public class McpGatewayController {
 
-    private static final Logger log = LoggerFactory.getLogger(McpGatewayController.class);
+    public static final String HEADER_SESSION_ID = "Mcp-Session-Id";
+    public static final String HEADER_PROTOCOL_VERSION = "MCP-Protocol-Version";
+
     private static final ObjectMapper mapper = new ObjectMapper();
-    private static final String PROTOCOL_VERSION = "2025-03-26";
-    private static final String JSON_RPC_VERSION = "2.0";
 
-    private final McpServerProvider serverProvider;
-    private final McpServerAuthVerifier authVerifier;
-    private final HttpToolRepository httpTools;
-    private final ParameterMappingRepository mappings;
-    private final HttpToolExecutor executor;
-    private final GatewayCallRecorder callRecorder;
+    private final McpProtocolService protocolService;
+    private final McpStreamableHttpSessionRegistry sessions;
 
-    public McpGatewayController(McpServerProvider serverProvider, McpServerAuthVerifier authVerifier,
-                                HttpToolRepository httpTools,
-                                ParameterMappingRepository mappings,
-                                HttpToolExecutor executor,
-                                GatewayCallRecorder callRecorder) {
-        this.serverProvider = serverProvider;
-        this.authVerifier = authVerifier;
-        this.httpTools = httpTools;
-        this.mappings = mappings;
-        this.executor = executor;
-        this.callRecorder = callRecorder;
+    public McpGatewayController(McpProtocolService protocolService,
+                                McpStreamableHttpSessionRegistry sessions) {
+        this.protocolService = protocolService;
+        this.sessions = sessions;
     }
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<String> handle(@PathVariable String serverCode,
-                                  @RequestBody String rawBody,
-                                  @RequestHeader(value = "Authorization", required = false) String authHeader,
-                                  HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString();
-        String clientIp = request.getRemoteAddr();
-        CallRecordContext recordContext = new CallRecordContext(serverCode, clientIp, traceId);
-        JsonNode id = null;
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<?> post(@PathVariable String serverCode,
+                           @RequestBody String rawBody,
+                           @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+                           @RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
+                           @RequestHeader(value = HEADER_SESSION_ID, required = false) String sessionId,
+                           @RequestHeader(value = HEADER_PROTOCOL_VERSION, required = false) String protocolVersion,
+                           @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+                           HttpServletRequest request) {
+        if (!isJsonContent(contentType)) {
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body("Content-Type must be application/json");
+        }
+        if (!acceptsJson(accept) && !acceptsSse(accept)) {
+            return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
+                    .body("Accept must include application/json or text/event-stream");
+        }
 
-        try {
-            JsonNode jsonRpc;
+        if (!isInitializeRequest(rawBody) && !isInitializedNotification(rawBody)
+                && (sessionId == null || sessionId.isBlank())) {
+            return ResponseEntity.badRequest().body("Missing MCP session. Initialize first and include Mcp-Session-Id.");
+        }
+        if (!isInitializeRequest(rawBody) && !isInitializedNotification(rawBody)
+                && sessions.find(sessionId, serverCode).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Invalid or expired MCP session");
+        }
+
+        McpProtocolService.ProtocolResult result =
+                protocolService.handle(serverCode, rawBody, authHeader, protocolVersion, request);
+
+        String responseProtocolVersion = result.protocolVersion();
+        String responseSessionId = sessionId;
+        if (result.initialized()) {
+            SessionState state = sessions.create(serverCode, responseProtocolVersion);
+            responseSessionId = state.sessionId();
+        }
+
+        if (result.response() == null) {
+            String finalResponseSessionId = responseSessionId;
+            return ResponseEntity.accepted()
+                    .header(HEADER_PROTOCOL_VERSION, responseProtocolVersion)
+                    .headers(headers -> addSessionHeader(headers, finalResponseSessionId))
+                    .build();
+        }
+
+        if (acceptsSse(accept) && prefersSse(accept)) {
+            SseEmitter emitter = new SseEmitter(0L);
             try {
-                jsonRpc = mapper.readTree(rawBody);
-            } catch (Exception e) {
-                recordContext.method("parse");
-                recordContext.fail("PARSE_ERROR");
-                return jsonRpcError(null, -32700, "Parse error");
+                String responseJson = mapper.writeValueAsString(result.response());
+                emitter.send(SseEmitter.event().name("message").data(responseJson));
+                if (responseSessionId != null && !responseSessionId.isBlank()) {
+                    sessions.publish(responseSessionId, "message", responseJson);
+                }
+                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
             }
-
-            String jsonrpc = jsonRpc.has("jsonrpc") ? jsonRpc.get("jsonrpc").asText() : JSON_RPC_VERSION;
-            id = jsonRpc.get("id");
-            String method = jsonRpc.has("method") ? jsonRpc.get("method").asText() : "";
-            JsonNode params = jsonRpc.has("params") ? jsonRpc.get("params") : mapper.createObjectNode();
-            recordContext.method(method);
-
-            if (!JSON_RPC_VERSION.equals(jsonrpc)) {
-                recordContext.fail("INVALID_JSONRPC_VERSION");
-                return jsonRpcError(id, -32600, "Invalid Request: jsonrpc version must be 2.0");
-            }
-            if (method.isBlank()) {
-                recordContext.fail("MISSING_METHOD");
-                return jsonRpcError(id, -32600, "Invalid Request: method is required");
-            }
-
-            PublishedServer server = serverProvider.load(serverCode).orElse(null);
-            if (server == null) {
-                recordContext.fail("SERVER_NOT_FOUND");
-                return jsonRpcError(id, -32002, "Server not found or not published");
-            }
-
-            if (!"initialize".equals(method)) {
-                String presentedKey = null;
-                if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                    presentedKey = authHeader.substring(7);
-                }
-                if (!authVerifier.verify(server.id(), presentedKey)) {
-                    recordContext.fail("AUTH_FAILED");
-                    return jsonRpcError(id, -32001, "Invalid or missing MCP Key");
-                }
-            }
-
-            return switch (method) {
-                case "initialize" -> {
-                    recordContext.succeed();
-                    yield handleInitialize(id, server);
-                }
-                case "tools/list" -> {
-                    recordContext.succeed();
-                    yield handleToolsList(id, server);
-                }
-                case "tools/call" -> handleToolsCall(id, server, params, recordContext);
-                case "ping" -> {
-                    recordContext.succeed();
-                    yield handlePing(id);
-                }
-                default -> {
-                    recordContext.fail("METHOD_NOT_FOUND");
-                    yield jsonRpcError(id, -32601, "Method not found: " + method);
-                }
-            };
-        } catch (Exception e) {
-            log.error("MCP request error: server={} method={}", serverCode, recordContext.mcpMethod, e);
-            recordContext.fail("INTERNAL_ERROR");
-            return jsonRpcError(id, -32603, "Internal error");
-        } finally {
-            publishCallRecord(recordContext);
+            String finalResponseSessionId = responseSessionId;
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_EVENT_STREAM)
+                    .header(HEADER_PROTOCOL_VERSION, responseProtocolVersion)
+                    .headers(headers -> addSessionHeader(headers, finalResponseSessionId))
+                    .body(emitter);
         }
+
+        String finalResponseSessionId = responseSessionId;
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HEADER_PROTOCOL_VERSION, responseProtocolVersion)
+                .headers(headers -> addSessionHeader(headers, finalResponseSessionId))
+                .body(result.response());
     }
 
-    private void publishCallRecord(CallRecordContext recordContext) {
+    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    SseEmitter stream(@PathVariable String serverCode,
+                      @RequestHeader(value = HEADER_SESSION_ID, required = false) String sessionId) {
         try {
-            callRecorder.record(
-                    recordContext.serverCode,
-                    recordContext.toolName,
-                    recordContext.clientIp,
-                    recordContext.traceId,
-                    recordContext.mcpMethod,
-                    recordContext.success,
-                    recordContext.statusCode,
-                    recordContext.durationMs(),
-                    recordContext.errorSummary);
-        } catch (Exception e) {
-            log.warn("Failed to publish gateway call record: server={} method={} traceId={}",
-                    recordContext.serverCode, recordContext.mcpMethod, recordContext.traceId, e);
+            return sessions.subscribe(sessionId, serverCode);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
 
-    private ResponseEntity<String> handleInitialize(JsonNode id, PublishedServer server) {
-        ObjectNode result = mapper.createObjectNode();
-        result.put("protocolVersion", PROTOCOL_VERSION);
-        ObjectNode capabilities = result.putObject("capabilities");
-        capabilities.putObject("tools");
-        ObjectNode serverInfo = result.putObject("serverInfo");
-        serverInfo.put("name", server.name());
-        serverInfo.put("version", "1.0.0");
-        return jsonRpcSuccess(id, result);
+    @DeleteMapping
+    ResponseEntity<Void> delete(@PathVariable String serverCode,
+                                @RequestHeader(value = HEADER_SESSION_ID, required = false) String sessionId) {
+        if (sessions.find(sessionId, serverCode).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        sessions.close(sessionId);
+        return ResponseEntity.noContent().build();
     }
 
-    private ResponseEntity<String> handleToolsList(JsonNode id, PublishedServer server) {
-        ObjectNode result = mapper.createObjectNode();
-        var toolsArray = result.putArray("tools");
-        for (PublishedTool tool : server.tools()) {
-            ObjectNode t = toolsArray.addObject();
-            t.put("name", tool.name());
-            t.put("description", tool.description() != null ? tool.description() : "");
-            try {
-                JsonNode schema = mapper.readTree(tool.inputSchema());
-                t.set("inputSchema", schema);
-            } catch (Exception e) {
-                t.set("inputSchema", mapper.createObjectNode());
-            }
-        }
-        return jsonRpcSuccess(id, result);
+    private boolean isJsonContent(String contentType) {
+        return contentType != null && contentType.toLowerCase(Locale.ROOT).contains(MediaType.APPLICATION_JSON_VALUE);
     }
 
-    private ResponseEntity<String> handleToolsCall(JsonNode id, PublishedServer server,
-                                                   JsonNode params, CallRecordContext recordContext) {
-        String toolName = params.has("name") ? params.get("name").asText() : "";
-        recordContext.tool(toolName);
-        JsonNode arguments = params.has("arguments") ? params.get("arguments") : mapper.createObjectNode();
+    private boolean acceptsJson(String accept) {
+        return accept == null || accept.isBlank()
+                || accept.contains(MediaType.ALL_VALUE)
+                || accept.toLowerCase(Locale.ROOT).contains(MediaType.APPLICATION_JSON_VALUE);
+    }
 
-        PublishedTool publishedTool = server.tools().stream()
-                .filter(t -> t.name().equals(toolName))
-                .findFirst()
-                .orElse(null);
-        if (publishedTool == null) {
-            recordContext.fail("TOOL_NOT_FOUND: " + toolName);
-            return jsonRpcError(id, -32003, "Tool not found: " + toolName);
+    private boolean acceptsSse(String accept) {
+        return accept != null && accept.toLowerCase(Locale.ROOT).contains(MediaType.TEXT_EVENT_STREAM_VALUE);
+    }
+
+    private boolean prefersSse(String accept) {
+        return accept != null && accept.toLowerCase(Locale.ROOT).trim().startsWith(MediaType.TEXT_EVENT_STREAM_VALUE);
+    }
+
+    private void addSessionHeader(HttpHeaders headers, String sessionId) {
+        if (sessionId != null && !sessionId.isBlank()) {
+            headers.add(HEADER_SESSION_ID, sessionId);
         }
+    }
 
-        HttpTool httpTool = httpTools.findById(publishedTool.id()).orElse(null);
-        if (httpTool == null) {
-            recordContext.fail("TOOL_DEFINITION_NOT_FOUND: " + toolName);
-            return jsonRpcError(id, -32004, "Tool definition not found in database");
-        }
+    private boolean isInitializeRequest(String rawBody) {
+        return hasMethod(rawBody, "initialize");
+    }
 
+    private boolean isInitializedNotification(String rawBody) {
+        return hasMethod(rawBody, "notifications/initialized");
+    }
+
+    private boolean hasMethod(String rawBody, String method) {
         try {
-            Map<String, Object> paramValues = new HashMap<>();
-            if (arguments.isObject()) {
-                arguments.fieldNames().forEachRemaining(key -> {
-                    JsonNode val = arguments.get(key);
-                    if (val.isTextual()) paramValues.put(key, val.asText());
-                    else if (val.isNumber()) paramValues.put(key, val.numberValue());
-                    else if (val.isBoolean()) paramValues.put(key, val.booleanValue());
-                    else if (!val.isNull()) paramValues.put(key, val.asText());
-                });
+            JsonNode root = mapper.readTree(rawBody);
+            if (root.isArray()) {
+                for (JsonNode item : root) {
+                    if (item.has("method") && method.equals(item.get("method").asText())) {
+                        return true;
+                    }
+                }
+                return false;
             }
-
-            List<ParameterMapping> paramMappings = mappings.findByToolId(httpTool.id());
-            List<HttpToolDefinition.ParameterMapping> defMappings = paramMappings.stream()
-                    .map(pm -> new HttpToolDefinition.ParameterMapping(
-                            pm.name(), pm.paramSource().name(), pm.paramLocation(),
-                            resolveType(pm.schemaJson()), pm.required(), pm.description()))
-                    .toList();
-
-            HttpToolDefinition definition = new HttpToolDefinition(
-                    httpTool.httpMethod().name(),
-                    httpTool.urlTemplate(),
-                    httpTool.headers(),
-                    httpTool.bodyTemplate(),
-                    defMappings);
-
-            ExecutionResult result = executor.execute(definition, paramValues);
-            recordContext.result(result.success(), result.statusCode(), result.errorMessage());
-
-            ObjectNode resultObj = mapper.createObjectNode();
-            var content = resultObj.putArray("content");
-            ObjectNode textContent = content.addObject();
-            textContent.put("type", "text");
-            if (result.success()) {
-                String body = result.responseSummary() != null ? result.responseSummary().body() : "";
-                textContent.put("text", body);
-            } else {
-                String errMsg = result.errorMessage() != null ? result.errorMessage() : "Unknown error";
-                textContent.put("text", "Error: " + errMsg);
-                resultObj.put("isError", true);
-            }
-
-            return jsonRpcSuccess(id, resultObj);
-
+            return root.has("method") && method.equals(root.get("method").asText());
         } catch (Exception e) {
-            recordContext.fail(e.getMessage() != null ? e.getMessage() : "TOOL_EXECUTION_ERROR");
-            return jsonRpcError(id, -32004, "Tool execution error");
-        }
-    }
-
-    private ResponseEntity<String> handlePing(JsonNode id) {
-        return jsonRpcSuccess(id, mapper.createObjectNode());
-    }
-
-    private String resolveType(String schemaJson) {
-        if (schemaJson == null || schemaJson.isBlank()) return "string";
-        try {
-            var node = mapper.readTree(schemaJson);
-            return node.has("type") ? node.get("type").asText() : "string";
-        } catch (Exception e) {
-            return "string";
-        }
-    }
-
-    private ResponseEntity<String> jsonRpcSuccess(JsonNode id, ObjectNode result) {
-        ObjectNode resp = mapper.createObjectNode();
-        resp.put("jsonrpc", JSON_RPC_VERSION);
-        resp.set("id", id);
-        resp.set("result", result);
-        return ResponseEntity.ok(resp.toString());
-    }
-
-    private ResponseEntity<String> jsonRpcError(JsonNode id, int code, String message) {
-        ObjectNode resp = mapper.createObjectNode();
-        resp.put("jsonrpc", JSON_RPC_VERSION);
-        resp.set("id", id);
-        ObjectNode error = resp.putObject("error");
-        error.put("code", code);
-        error.put("message", message);
-        return ResponseEntity.ok(resp.toString());
-    }
-
-    private static class CallRecordContext {
-        private final String serverCode;
-        private final String clientIp;
-        private final String traceId;
-        private final long startNanos = System.nanoTime();
-        private String mcpMethod = "unknown";
-        private String toolName;
-        private boolean success;
-        private int statusCode;
-        private String errorSummary = "INTERNAL_ERROR";
-
-        private CallRecordContext(String serverCode, String clientIp, String traceId) {
-            this.serverCode = serverCode;
-            this.clientIp = clientIp;
-            this.traceId = traceId;
-        }
-
-        private void method(String mcpMethod) {
-            if (mcpMethod != null && !mcpMethod.isBlank()) {
-                this.mcpMethod = mcpMethod;
-            }
-        }
-
-        private void tool(String toolName) {
-            this.toolName = toolName;
-        }
-
-        private void succeed() {
-            this.success = true;
-            this.statusCode = 0;
-            this.errorSummary = null;
-        }
-
-        private void fail(String errorSummary) {
-            this.success = false;
-            this.errorSummary = errorSummary;
-        }
-
-        private void result(boolean success, int statusCode, String errorSummary) {
-            this.success = success;
-            this.statusCode = statusCode;
-            this.errorSummary = success ? null : (errorSummary != null ? errorSummary : "TOOL_EXECUTION_FAILED");
-        }
-
-        private int durationMs() {
-            long duration = (System.nanoTime() - startNanos) / 1_000_000;
-            return duration > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) duration;
+            return false;
         }
     }
 }

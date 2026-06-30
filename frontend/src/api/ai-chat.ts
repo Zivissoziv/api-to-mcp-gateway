@@ -5,6 +5,13 @@ export interface SessionInfo {
   serverName: string
   serverCode: string
   tools: string[]
+  servers?: LoadedServerInfo[]
+}
+
+export interface LoadedServerInfo {
+  serverName: string
+  serverCode: string
+  tools: string[]
 }
 
 export interface ToolCallInfo {
@@ -26,6 +33,13 @@ export async function createSession(serverId: number, modelConfigId: number, mcp
   return fetchJson('/api/ai-chat/sessions', {
     method: 'POST',
     body: JSON.stringify({ serverId, modelConfigId, mcpKey }),
+  })
+}
+
+export async function createMultiServerSession(serverIds: number[], modelConfigId: number, mcpKeys: Record<number, string | null>): Promise<SessionInfo> {
+  return fetchJson('/api/ai-chat/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ serverIds, modelConfigId, mcpKeys }),
   })
 }
 
